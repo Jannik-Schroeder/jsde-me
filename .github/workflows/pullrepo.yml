@@ -18,7 +18,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-and-push-image:
+  pull-new-branch:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -28,5 +28,5 @@ jobs:
     
       - name: Restart Node
         run: |
-          ${{ secrets.RESTART_URL }}
+          curl -X POST http://api.arlinx.de/execute -H "Content-Type: application/json" -H "x-api-key: ${{ secrets.API_TOKEN }}"
           
