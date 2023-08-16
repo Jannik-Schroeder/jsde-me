@@ -28,5 +28,5 @@ jobs:
     
       - name: Restart Node
         run: |
-          ${{ secrets.RESTART_URL }}
+          ${{ secrets.RESTART_URL }} 
           
