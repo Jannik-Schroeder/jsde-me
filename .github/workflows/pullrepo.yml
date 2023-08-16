@@ -1,32 +1,15 @@
-# This workflow uses actions that are not certified by GitHub.
-# They are provided by a third-party and are governed by
-# separate terms of service, privacy policy, and support
-# documentation.
-
-# GitHub recommends pinning actions to a commit SHA.
-# To get a newer version, you will need to update the SHA.
-# You can also reference a tag or branch, but the action may change without warning.
-
-name: Create and publish a Docker image
+name: Trigger Git Pull on Server
 
 on:
   push:
     branches:
-      - main
-      - dev
-      - docker
-  workflow_dispatch:
+      - main # oder den Namen des Zweiges, den du überwachen möchtest, z.B. 'master' 
 
 jobs:
-  pull-new-branch:
+  trigger-pull:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
 
     steps:
-    
-      - name: Restart Node
-        run: |
-          curl -X POST http://api.arlinx.de/execute -H "Content-Type: application/json" -H "x-api-key: ${{ secrets.API_TOKEN }}"
-          
+    - name: Send request to server to trigger git pull
+      run: |
+        curl -k -X POST https://api.arlinx.de/execute -H "Content-Type: application/json" -H "x-api-key: ${{ secrets.API_TOKEN }}"
