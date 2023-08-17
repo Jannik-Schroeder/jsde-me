@@ -58,7 +58,7 @@ export default function AuthorLayout({ children, frontMatter }) {
                 {text1} Currently, I am focused on building data pipelines and automating them for
                 the{' '}
                 <Link
-                  href={'https://www.accenture.com/in-en'}
+                  href={'https://spwhub.com'}
                   className="special-underline no-underline hover:text-gray-100 dark:text-gray-100 hover:dark:text-gray-100"
                 >
                   SPWHub
