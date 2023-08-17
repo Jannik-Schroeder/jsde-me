@@ -4,7 +4,7 @@ import { SiLeetcode } from 'react-icons/si'
 import { Disclosure, Transition } from '@headlessui/react'
 import { HiChevronDown, HiOutlineDatabase } from 'react-icons/hi'
 import { FaBaby } from 'react-icons/fa'
-import { BsBuilding } from 'react-icons/bs'
+import { BsBuilding, BsFillSendFill } from 'react-icons/bs'
 import { RiDoorClosedLine } from 'react-icons/ri'
 import { TbDeviceDesktopAnalytics } from 'react-icons/tb'
 
@@ -12,6 +12,21 @@ export default function Timeline() {
   return (
     <div>
       <ol className="relative mt-6 ml-6 border-l border-zinc-400 dark:border-gray-800 ">
+        <li className="mb-2 ml-8 rounded-md border border-gray-100 bg-white  px-4  py-4 shadow-sm shadow-gray-300 dark:border-zinc-900 dark:bg-zinc-900 dark:shadow-none">
+          <span className="absolute -left-3 flex h-6 w-6 items-center justify-center rounded-full bg-red-200 ring-8 ring-white dark:bg-red-900 dark:ring-gray-900">
+            <AiOutlineCode />
+          </span>
+          <h3 className="text-base font-semibold text-gray-900 dark:text-white">
+            Ops for Solun Services
+          </h3>
+
+          <time className="text-sm font-normal leading-none text-gray-400 dark:text-gray-500">
+            May 5th, 2023
+          </time>
+          <p className="mt-1 text-sm font-normal text-gray-500 dark:text-gray-400">
+            Started working as an Ops for Solun Services Project
+          </p>
+        </li>
         <li className="mb-4 ml-8 rounded-md border border-gray-100 bg-white  px-4  py-4 shadow-sm shadow-gray-300 dark:border-zinc-900 dark:bg-zinc-900 dark:shadow-none">
           <span className=" absolute -left-3 flex h-6 w-6 animate-pulse items-center justify-center rounded-full bg-blue-200 ring-8 ring-white dark:bg-green-900 dark:ring-gray-900">
             <BsBuilding className="animate-none" />
@@ -23,10 +38,10 @@ export default function Timeline() {
             </span>
           </h3>
           <time className="text-sm font-normal leading-none text-gray-400 dark:text-gray-500">
-            June 13th, 2022
+            June 13th, 2021
           </time>
           <p className="mt-1 text-sm font-normal text-gray-500 dark:text-gray-400">
-            Feel confident that I can work as a junior Data Engineer. Wish me Luck
+            Started my apprenticeship as a System Administrator at the University of Paderborn
           </p>
         </li>
         {/*<li className="mb-2 ml-8 rounded-md border border-gray-100 bg-white  px-4  py-4 shadow-sm shadow-gray-300 dark:border-zinc-900 dark:bg-zinc-900 dark:shadow-none">
