@@ -32,7 +32,7 @@ const projectsData = [
   },
   {
     title: 'HomeLab',
-    description: `This this is the Story af my HomeLab. Were i host all my Projects.`,
+    description: `This this is the Story of my HomeLab. Were i host all my Projects.`,
     imgSrc: '',
     href: 'https://scpx.de',
     github: '',
