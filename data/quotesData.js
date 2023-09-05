@@ -1,9 +1,5 @@
 export const quotes = [
   {
-    author: 'Andrew Tate',
-    quote: `They want to get rich, but they have no plan to get rich! And a hope and a plan are two different things.`,
-  },
-  {
     author: 'Miyamoto Musashi',
     quote: `It is better to be a warrior in a garden, than a gardener in a war.`,
   },
@@ -30,9 +26,5 @@ export const quotes = [
   {
     author: 'Plato',
     quote: `As empty vessels make the loudest sound, so they that have the least wit are the greatest blabbers.`,
-  },
-  {
-    author: 'Andrew Tate',
-    quote: `It's pretty easy to win if you never lose.`,
   },
 ]
