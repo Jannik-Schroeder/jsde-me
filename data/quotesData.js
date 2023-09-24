@@ -27,4 +27,8 @@ export const quotes = [
     author: 'Plato',
     quote: `As empty vessels make the loudest sound, so they that have the least wit are the greatest blabbers.`,
   },
+  {
+    author: 'Iman Ghadzi',
+    quote: `Whether you do, or whether you don't, they're still going to talk about you. At gatherings, they'll whisper about you whether you're making moves or standing still. So, just do what you want to do. Let them talk.`,
+  },
 ]
