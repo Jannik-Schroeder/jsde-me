@@ -51,7 +51,7 @@ spec:
   entryPoints:
     - websecure
   routes:
-    - match: Host(`jsde.scpx.de`)
+    - match: Host(`jsde.me`)
       kind: Rule
       services:
         - name: jsde-app
@@ -71,4 +71,4 @@ spec:
     name: letsencrypt-production
     kind: ClusterIssuer
   dnsNames:
-    - jsde.scpx.de
+    - jsde.me
