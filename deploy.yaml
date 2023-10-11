@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jsde-app
+  namespace: jsde
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jsde-app
+  template:
+    metadata:
+      labels:
+        app: jsde-app
+    spec:
+      containers:
+      - name: jsde-app
+        image: ghcr.io/jannik-schroeder/jsde-me:main
+        ports:
+        - containerPort: 3000
+
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: jsde-ingress
+  namespace: jsde
+  annotations:
+    kubernetes.io/ingress.class: traefik-external
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`jsde.scpx.de`)
+      kind: Rule
+      services:
+        - name: jsde-app
+          port: 3000
+  tls:
+    secretName: jsde-scpx-de-tls
+
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: jsde-scpx-de
+  namespace: jsde
+spec:
+  secretName: jsde-scpx-de-tls
+  issuerRef:
+    name: letsencrypt-production
+    kind: ClusterIssuer
+  commonName: "*.scpx.de"
+  dnsNames:
+    - "jsde.scpx.de"
