@@ -36,6 +36,7 @@ spec:
       containers:
       - name: jsde-app
         image: ghcr.io/jannik-schroeder/jsde-me:main
+        imagePullPolicy: Always
         ports:
         - containerPort: 3000
 
