@@ -1,0 +1,49 @@
+---
+title: Proxmox VE Cloud-Init Debian 12
+date: '2023-10-15'
+tags: [Proxmox, Cloud-Init, Debian]
+draft: false
+summary: Create a Debian 12 Cloud-Init template for Proxmox VE
+images: []
+layout: PostSimple
+---
+
+First, download the Debian 12 cloud image from the Debian website per CLI with the following command:
+
+```bash 
+wget https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-generic-amd64.raw
+```
+
+Create a new VM:
+
+```bash
+qm create 9000
+```
+
+Import the downloaded image:
+Make sure to change data to the correct storage name.
+
+```bash
+qm importdisk 8000 debian-12-generic-amd64.raw data
+```
+
+Now navigate to the Proxmox web interface and edit the VM you just created.
+Go to the Hardware tab and add double click on the hard disk named Unused Disk 0.
+
+Change the Bus Device to SCSI and tick the Discard option.
+
+<img className="inline" src="/static/images/snippets/disk-settings-cloud-init.png" alt="Disk Settings" />
+
+
+After that, go to the Options tab and select the Boot Order option. Change the boot Order to the Disk we just added.
+
+Also we have to add a Network Device. navigate to the Hardware tab and click on Add -> Network Device. Select the correct Network Device and click on Add. 
+it is advantageous to select VirtIO as model because it is faster.
+
+Now we have to add the Cloud-Init drive. Navigate to the Hardware tab and click on Add -> CloudInit Drive. Select the correct Cloud-Init drive and click on Add.
+
+Navigate to the CloudInit tab and start configuring the Cloud-Init settings.
+
+After that, click the regernate Image button and start the VM.
+
+After you validated that the VM is working, you could convert the VM to a template.
