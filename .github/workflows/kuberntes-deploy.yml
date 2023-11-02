@@ -53,3 +53,10 @@ jobs:
         run: |
           kubectl apply -f https://raw.githubusercontent.com/Jannik-Schroeder/jsde-me/main/deploy.yaml
 
+      - name: Rollout restart
+        run: |
+          kubectl rollout restart deployment/jsde-app -n jsde
+
+      - name: Rollout status
+        run: |
+          kubectl rollout status deployment/jsde-me
