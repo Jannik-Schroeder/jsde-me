@@ -59,4 +59,4 @@ jobs:
 
       - name: Rollout status
         run: |
-          kubectl rollout status deployment/jsde-me
+          kubectl rollout status deployment/jsde-app -n jsde
