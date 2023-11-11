@@ -31,4 +31,8 @@ export const quotes = [
     author: 'Iman Ghadzi',
     quote: `Whether you do, or whether you don't, they're still going to talk about you. At gatherings, they'll whisper about you whether you're making moves or standing still. So, just do what you want to do. Let them talk.`,
   },
+  {
+    author: 'Alex Hormozi',
+    quote: `Easy productivity hack: Instead of spending time “getting in the mood to work”… Just start working. Confront the work. People think they need perfect conditions to start, when in reality, starting is the perfect condition.`,
+  },
 ]
