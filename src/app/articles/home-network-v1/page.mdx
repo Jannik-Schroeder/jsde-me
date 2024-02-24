@@ -1,0 +1,90 @@
+import { ArticleLayout } from '@/components/ArticleLayout'
+import SwitchMK from './IMG_3971.jpeg'
+import Rack from './IMG_3972.jpeg'
+import Proxmox from './proxmox2023CPU.png'
+import ResourceProvider from './resourceProvider.png'
+
+
+export const article = {
+    author: 'Jannik Schröder',
+    date: '2023-11-02',
+    title: 'My new home network infrastructure',
+    description:
+        "The article recounts the author's experience in upgrading their home network to a sophisticated homelab setup, involving the installation of advanced networking hardware and overcoming technical challenges during the migration process, ultimately resulting in a more capable and customized network infrastructure.",
+}
+
+export const metadata = {
+    title: article.title,
+    description: article.description,
+}
+
+export default (props) => <ArticleLayout article={article} {...props} />
+
+## Introduction
+
+I have been using a AVM FritzBox for the past couple of Years. But lately I have been digging down the Rabbit hole of the hole Homelab and affordable networking equipment. I've already got a thin client at home and a Dedicated Server hosted at Hetzner. So I thought why not buy some Networking equipment and start a Homelab.
+
+So here I am with a new maybe foolish idea, but so I've begun drafting a network plan to outline what my ideal setup would look like for my home network.
+
+<Image src={ResourceProvider} alt="" />
+
+
+## Hardware
+
+### Server
+
+Besides Planning the Network Structure, I've already bought an Enterprise Server from Ebay. GIGABYTE HPE R281-N40 CL2200
+
+The Server has 2x Intel Xeon Platinum 8124m QS 3.0GHz with 72 Cores. 1TB of DDR4 ECC Ram, 2x 4TB SSDs for the OS and 16x 128GB SSDs for the Storage.
+
+<Image src={Proxmox} alt="" />
+
+
+### Switch
+
+For Switches I've bought a TP-Link TL-SG3210XHP-M2 8-Port 2.5G PoE+ Managed Switch and a TP-Link TL-SG3428X 24-Port 1G SFP+ Managed Switch.
+
+### Router
+
+For the Router I've bought a TP-Link ER8411 10G VPN Router.
+
+### Modem
+
+For the Modem I've bought a DrayTek Vigor 167 VDSL2/ADSL2+ Modem.
+
+### And a bunch of Cables
+
+## Migration
+
+The Migration from the FritzBox to the new Network will be a bit tricky. Because we have to replace old Cables on the fly. So there will be a bit of downtime for the Network. But I will try to keep it as short as possible.
+
+## Before the Migration
+
+Before shutting down the FritzBox, I'd lay out the new Cables and the two Switches per Fiber Optic Cable.
+
+## Migration
+
+So one Weekend I've just shut down the FritzBox and replaced the Cables with the new ones. I've replaced all Important Pieces and plugged the new Cables into the Router. And of course, as expected, it didn't work straight away and I was offline for 3 days.
+
+Here is a list of the Problems I've encountered:
+
+- Reconfiguring the Modem from Router to Bridge Mode
+- Requesting new PPPoE Credentials from my ISP
+- Configuring the VLANs on the Router (several times because I locked myself out)
+
+## After the Migration
+
+After the 3 days of downtime, I've finally got the Network up and running. Now the fun part begins, playing around with the new Network and configuring the Server.
+
+## Pictures
+
+<div style={{ display: 'flex', justifyContent: 'space-between' }}>
+    <Image src={SwitchMK} alt="" style={{ width: '48%', marginRight: '4%' }} />
+
+    <Image src={Rack} alt="" style={{ width: '48%' }} />
+</div>
+
+
+## Conclusion
+
+I've learned a lot about Networking and how to configure a Router. I've also learned that I should have planned the Network a bit better. But I'm happy with the result and I'm looking forward to the next Project. Maybe a new Server or a new NAS. To see my Server Setup, Checkout the Blog for the next Post.

@@ -1,0 +1,47 @@
+import { ArticleLayout } from '@/components/ArticleLayout'
+import networkdiagramm from './networkdiagramm.png'
+import server from './server.png'
+import switchmk from './switchmk.png'
+
+export const article = {
+  author: 'Jannik Schröder',
+  date: '2023-09-17',
+  title: 'First steps into the new home network',
+  description:
+    'I describe the first steps in the new home network and how I connected the 2 main hubs.',
+}
+
+export const metadata = {
+  title: article.title,
+  description: article.description,
+}
+
+export default (props) => <ArticleLayout article={article} {...props} />
+
+I've been planning how to set up the network at home most efficiently for quite some time. I have decided that I have the main location in the house where the server cabinet is in yellow marked here and the secondary location where the DSL internet arrives here purple marked to connect via fiber.
+
+
+
+<Image src={networkdiagramm} alt="" />
+
+## The Steps to connect the 2 locations
+
+### 1. The first step was to connect the 2 locations with 2 fiber cables.
+
+The first thing I did was purchase the two switches. One is a PoE switch since I need to connect access points and cameras. And thus can save the power cables. So I installed the switches and hung them up and measured the distances, bought cables and cable ducts and attached them. The distance was about 17m, so I bought 20 meters of cable and different sizes of cable ducts.
+
+<Image src={server} alt="" />
+
+As you can see, this is the current progress in the rack. The server is built in and installed, but I
+will write about it in the future. The switch is also installed and connected to the second switch. As
+you can see the cables are routed through a patch panel so I have a structure in the rack from the beginning.
+
+<Image src={switchmk} alt="" />
+
+
+The second switch simply hangs on the wall in the room where the DSL is located. In the future, the modem
+will be installed there, which will be a Vigor 167. The switch has a cable which is patched to VLAN 7.
+(VLAN 7 is the standard VLAN of the telekom DSL line). The other line will be a multi VLAN line for all
+possible other devices.
+
+I have labeled all cables with a laptop printer from the beginning so that there is no confusion.

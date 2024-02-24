@@ -1,0 +1,259 @@
+import { ArticleLayout } from '@/components/ArticleLayout'
+
+
+export const article = {
+    author: 'Jannik Schröder',
+    date: '2023-11-19',
+    title: 'Install HA k3s with Traefik, CertManager, and a Virtual IP',
+    description:
+        'In this process, we set up a high-availability Kubernetes cluster using k3s and Keepalived, and then installed and configured CertManager for certificate management and Traefik as an ingress controller, ensuring a robust, secure, and scalable infrastructure.',
+}
+
+export const metadata = {
+    title: article.title,
+    description: article.description,
+}
+
+export default (props) => <ArticleLayout article={article} {...props} />
+
+## Configure Master Node
+1. Update and install necessary packages:
+
+```
+ apt-get update && apt-get upgrade && apt-get install curl keepalived vim
+```
+
+2. Edit the `keepalived` configuration:
+ ```shell
+ vim /etc/keepalived/keepalived.conf
+    ```
+And add the following configuration:
+ ```
+ vrrp_instance VI_1 {
+     state MASTER
+     interface eth0  # Replace with your active network interface
+     virtual_router_id 91
+     priority 100
+     virtual_ipaddress {
+         10.1.0.91 # Any free IP in the network
+     }
+ }
+    ```
+
+3. Restart `keepalived` and install k3s:
+ ```shell
+ systemctl restart keepalived
+ curl -sfL https://get.k3s.io/ | sh -s - server --token=EXAMPLE_TOKEN --tls-san 10.1.0.91 --disable=traefik --cluster-init
+    ```
+
+Adding `--tls-san` ensures no certificate errors over the virtual IP.
+
+4. If no errors occur, the first node should be started. For HA, we need at least two more nodes.
+
+## Set Up Slave Nodes
+Both nodes are set up exactly the same way:
+
+1. Update and install necessary packages:
+ ```shell
+ apt-get update && apt-get upgrade && apt-get install curl keepalived vim
+    ```
+
+2. Edit the `keepalived` configuration:
+```shell
+ vim /etc/keepalived/keepalived.conf
+```
+And add the same configuration as above.
+
+3. Restart `keepalived` and join the cluster:
+```shell
+ systemctl restart keepalived
+ curl -sfL https://get.k3s.io/ | sh -s - server --token=EXAMPLE_TOKEN --tls-san 10.1.0.91 --disable=traefik --server https://ipv4-first-server:6443/
+```
+
+## Test the Installation
+1. Install `kubectl` on the local machine.
+2. Copy `/etc/rancher/k3s/k3s.yaml` from the first node to local `~/.kube/config`.
+3. Run `kubectl get nodes`. The output should look like this:
+
+```
+ NAME              STATUS   ROLES                       AGE   VERSION
+ scpx-k3s-prod-1   Ready    control-plane,etcd,master   12d   v1.27.6+k3s1
+ scpx-k3s-prod-2   Ready    control-plane,etcd,master   11d   v1.27.6+k3s1
+ scpx-k3s-prod-3   Ready    control-plane,etcd,master   11d   v1.27.6+k3s1
+```
+
+## Install CertManager
+Follow the steps below:
+
+1. Install Helm package manager locally.
+2. Set up `certmanager`:
+```shell
+ mkdir certmanager && cd certmanager
+ vim values.yaml
+```
+And add the following configuration:
+```yaml
+ installCRDs: false
+ replicaCount: 3
+ extraArgs:
+   - --dns01-recursive-nameservers=1.1.1.1:53,9.9.9.9:53
+   - --dns01-recursive-nameservers-only
+ podDnsPolicy: None
+ podDnsConfig:
+   nameservers:
+     - 1.1.1.1
+     - 9.9.9.9
+```
+
+3. Create secret and certificates:
+```shell
+ vim secret-cf-token.yaml
+```
+And add the following configuration:
+```yaml
+ ---
+ apiVersion: v1
+ kind: Secret
+ metadata:
+   name: cloudflare-api-key-secret
+   namespace: cert-manager
+ type: Opaque
+ stringData:
+   api-key: GLOABAL-API-KEY
+```
+
+```shell
+vim letsencrypt-production.yaml
+```
+And add the following configuration:
+```yaml
+---
+ apiVersion: cert-manager.io/v1
+ kind: ClusterIssuer
+ metadata:
+   name: letsencrypt-production
+ spec:
+   acme:
+     server: https://acme-v02.api.letsencrypt.org/directory
+     email: CLOUDFLARE-EMAIL
+     privateKeySecretRef:
+       name: letsencrypt-production
+     solvers:
+       - dns01:
+           cloudflare:
+             email: CLOUDFLARE-EMAIL
+             apiKeySecretRef:
+               name: cloudflare-api-key-secret
+               key: api-key
+```
+
+4. Install `cert-manager` and apply configurations:
+```shell
+ helm repo add jetstack https://charts.jetstack.io
+ helm repo update
+ helm install cert-manager jetstack/cert-manager --namespace cert-manager --create-namespace --version v1.13.1 --values=values.yaml --set installCRDs=true
+ kubectl apply -f secret-cf-token.yaml
+ kubectl apply -f letsencrypt-production.yaml
+```
+
+## Install Traefik
+Follow the steps below:
+
+1. Setup `traefik`:
+```shell
+ mkdir traefik && cd traefik
+ helm repo add traefik https://traefik.github.io/charts
+ vim values.yaml
+```
+And add the following configuration:
+ ```yaml
+ globalArguments:
+   - "--global.sendanonymoususage=false"
+   - "--global.checknewversion=false"
+
+ additionalArguments:
+   - "--serversTransport.insecureSkipVerify=true"
+   - "--accesslog=true"
+   - "--log.level=INFO"
+
+ deployment:
+   enabled: true
+   replicas: 3
+   annotations: {}
+   podAnnotations: {}
+   additionalContainers: []
+   initContainers: []
+
+ ports:
+   web:
+     redirectTo: websecure
+   websecure:
+     tls:
+       enabled: true
+
+ ingressRoute:
+   dashboard:
+     enabled: false
+
+ providers:
+   kubernetesCRD:
+     enabled: true
+     ingressClass: traefik-external
+     allowExternalNameServices: true
+   kubernetesIngress:
+     enabled: true
+     allowExternalNameServices: true
+     publishedService:
+       enabled: false
+
+ rbac:
+   enabled: true
+```
+
+
+2. Install `traefik` and configure dashboard:
+ ```shell
+ helm install traefik traefik/traefik -f values.yaml -n traefik
+ vim dashboard.yaml
+```
+
+ ```yaml
+ apiVersion: traefik.containo.us/v1alpha1
+ kind: IngressRoute
+ metadata:
+   name: traefik-dashboard
+   namespace: traefik
+   annotations:
+     kubernetes.io/ingress.class: traefik-external
+ spec:
+   entryPoints:
+     - websecure
+   routes:
+     - match: Host(`DOMAIN.TLD`)
+       kind: Rule
+       services:
+         - name: api@internal
+           kind: TraefikService
+   tls:
+     secretName: traefik-tls
+
+ ---
+ apiVersion: cert-manager.io/v1
+ kind: Certificate
+ metadata:
+   name: traefik-tls
+   namespace: traefik
+ spec:
+   secretName: traefik-tls
+   issuerRef:
+     name: letsencrypt-production
+     kind: ClusterIssuer
+   dnsNames:
+     - DOMAIN.TLD
+```
+
+ ```shell
+ kubectl apply -f dashboard.yaml
+```
+
+3. Finally, forward the ports in the firewall and set up DNS entries. It should work now.

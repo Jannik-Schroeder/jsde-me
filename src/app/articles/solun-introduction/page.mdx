@@ -1,0 +1,38 @@
+import { ArticleLayout } from '@/components/ArticleLayout'
+import image from './img.png'
+
+export const article = {
+  author: 'Jannik Schröder',
+  date: '2023-06-29',
+  title: 'Solun Introduction',
+  description:
+    'Solun is a service that allows you to share files, text and sending emails with end-to-end encryption, without having to worry about your privacy.',
+}
+
+export const metadata = {
+  title: article.title,
+  description: article.description,
+}
+
+export default (props) => <ArticleLayout article={article} {...props} />
+
+## What is the purpose of Solun?
+
+Solun aims to fill the gap in the privacy space and create an independent,
+open service that allows you to share files, text and send emails with end-to-end encryption -
+without having to use external services like Whatsapp, Telegram, Signal and more.
+
+## What is this Article about?
+
+This article is mainly about the Infrastructure
+and how I build the server structure and how we ensure our data security and uptime.
+For information about the code and development, check out the blog [here](https://dwag.me/project/solun).
+
+## How is the Server structured?
+
+<Image src={image} alt="" />
+
+Maybe you ask why we have chosen this structure. Let's start with why we chose VM's instead of the cloud. Simply because it is cheaper. We have virtualized our systems with Proxmox.
+The reason why we have chosen Proxmox is that it is open-source and has a great community.
+
+We are going to cover the other parts of the structure in upcoming Articles.
