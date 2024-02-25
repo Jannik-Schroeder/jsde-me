@@ -9,10 +9,10 @@ export const metadata: Metadata = {
   title: {
     template: '%s - Jannik Schröder',
     default:
-      'Jannik Schröder - System Administrator, founder, and amateur martial artist',
+      'Jannik Schröders - System Admin and Founder',
   },
   description:
-    'Im Jannik a German system administrator with a passion for all things Linux. I specialize in building robust data pipelines and automating tasks for my HomeLab Project. In my pursuit of continuous improvement, Im currently exploring ways to enhance redundancy and resilience.',
+    'I’m a system administrator and founder. I love to build and automate things. I’m passionate about privacy and security.',
   alternates: {
     types: {
       'application/rss+xml': `${process.env.NEXT_PUBLIC_SITE_URL}/feed.xml`,
