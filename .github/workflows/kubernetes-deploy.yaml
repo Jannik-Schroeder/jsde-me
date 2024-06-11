@@ -41,22 +41,3 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-
-  deploy-with-kubectl:
-    runs-on: self-hosted
-    needs: build-and-push
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
-
-      - name: Deploy to Kubernetes
-        run: |
-          kubectl apply -f https://raw.githubusercontent.com/Jannik-Schroeder/jsde-me/main/deploy.yaml
-
-      - name: Rollout restart
-        run: |
-          kubectl rollout restart deployment/jsde-app -n jsde
-
-      - name: Rollout status
-        run: |
-          kubectl rollout status deployment/jsde-app -n jsde
