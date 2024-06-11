@@ -14,12 +14,18 @@ const projects = [
     link: { href: 'https://solun.pm', label: 'solun.pm' },
     logo: logoSolun,
   },
-    {
-        name: 'Portfolio',
-        description: 'This Website is a portfolio of my work. I built it using Next.js and Tailwind CSS. It’s open-source and you can find the code on GitHub.',
-        link: { href: 'github.com/jannik-schroeder/jsde-me', label: 'github.com' },
-        logo: logoPortfolio,
-    },
+  {
+    name: 'Wanngehalt.de',
+    description:
+      'Wanngehalt.de is a website that calculates the last working day of the month on which the salary should be paid. It is open source and you can find the code on GitHub.',
+    link: { href: 'wangehalt.de', label: 'wanngehalt.de' },
+  },
+  {
+    name: 'Portfolio',
+    description: 'This Website is a portfolio of my work. I built it using Next.js and Tailwind CSS. It’s open-source and you can find the code on GitHub.',
+    link: { href: 'github.com/jannik-schroeder/jsde-me', label: 'github.com' },
+    logo: logoPortfolio,
+  },
 ]
 
 function LinkIcon(props: React.ComponentPropsWithoutRef<'svg'>) {
