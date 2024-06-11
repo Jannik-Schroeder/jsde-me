@@ -5,7 +5,6 @@ import logoPortfolio from '@/images/logos/avatar.png'
 import { Card } from '@/components/Card'
 import { SimpleLayout } from '@/components/SimpleLayout'
 
-
 const projects = [
   {
     name: 'Solun',
@@ -22,7 +21,8 @@ const projects = [
   },
   {
     name: 'Portfolio',
-    description: 'This Website is a portfolio of my work. I built it using Next.js and Tailwind CSS. It’s open-source and you can find the code on GitHub.',
+    description:
+      'This Website is a portfolio of my work. I built it using Next.js and Tailwind CSS. It’s open-source and you can find the code on GitHub.',
     link: { href: 'github.com/jannik-schroeder/jsde-me', label: 'github.com' },
     logo: logoPortfolio,
   },
@@ -57,12 +57,17 @@ export default function Projects() {
         {projects.map((project) => (
           <Card as="li" key={project.name}>
             <div className="relative z-10 flex h-12 w-12 items-center justify-center rounded-full bg-white shadow-md shadow-zinc-800/5 ring-1 ring-zinc-900/5 dark:border dark:border-zinc-700/50 dark:bg-zinc-800 dark:ring-0">
-              <Image
-                src={project.logo}
-                alt=""
-                className="h-8 w-8"
-                unoptimized
-              />
+              {project.logo ? (
+                <Image
+                  src={project.logo}
+                  alt=""
+                  width={48}
+                  height={48}
+                  className="rounded-full"
+                />
+              ) : (
+                <div className="text-zinc-500 dark:text-zinc-400">JS</div>
+              )}
             </div>
             <h2 className="mt-6 text-base font-semibold text-zinc-800 dark:text-zinc-100">
               <Card.Link href={project.link.href}>{project.name}</Card.Link>
