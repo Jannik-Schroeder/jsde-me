@@ -187,20 +187,20 @@ function Resume() {
       company: 'University of Paderborn',
       title: 'Apprenticeship System Admin',
       logo: logoUni,
-      start: '2021 August',
-      end: '2023 June',
+      start: 'August 2021',
+      end: 'June 2023',
     },
-//    {
-//      company: 'Starbucks',
-//      title: 'Shift Supervisor',
-//      logo: logoStarbucks,
-//      start: '2008',
+    //    {
+    //      company: 'Starbucks',
+    //      title: 'Shift Supervisor',
+    //      logo: logoStarbucks,
+    //      start: '2008',
 
-//      end: {
-//      label: 'Present',
-//      dateTime: new Date().getFullYear().toString(),
-//      },
-//    },
+    //      end: {
+    //      label: 'Present',
+    //      dateTime: new Date().getFullYear().toString(),
+    //      },
+    //    },
   ]
 
   return (
@@ -256,10 +256,18 @@ export default async function Home() {
             System Administrator, founder, and amateur martial artist.
           </h1>
           <p className="mt-6 text-base text-zinc-600 dark:text-zinc-400">
-            I&apos;m Jannik a German system administrator with a passion for all things Linux. I specialize in building robust data pipelines and automating tasks for my HomeLab Project. In my pursuit of continuous improvement, I&apos;m currently exploring ways to enhance redundancy and resilience.
+            I&apos;m Jannik a German system administrator with a passion for all
+            things Linux. I specialize in building robust data pipelines and
+            automating tasks for my HomeLab Project. In my pursuit of continuous
+            improvement, I&apos;m currently exploring ways to enhance redundancy
+            and resilience.
           </p>
           <div className="mt-6 flex gap-6">
-            <SocialLink href="https://twitter.com/jsde_me" aria-label="Follow on X" icon={XIcon} />
+            <SocialLink
+              href="https://twitter.com/jsde_me"
+              aria-label="Follow on X"
+              icon={XIcon}
+            />
             <SocialLink
               href="https://www.instagram.com/hijannikschroeder/"
               aria-label="Follow on Instagram"
