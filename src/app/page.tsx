@@ -187,18 +187,19 @@ function Resume() {
       company: 'University of Paderborn',
       title: 'Apprenticeship System Admin',
       logo: logoUni,
-      start: '2021',
-      end: {
-        label: 'Present',
-        dateTime: new Date().getFullYear().toString(),
-      },
+      start: '2021 August',
+      end: '2023 June',
     },
 //    {
 //      company: 'Starbucks',
 //      title: 'Shift Supervisor',
 //      logo: logoStarbucks,
 //      start: '2008',
-//      end: '2011',
+
+//      end: {
+//      label: 'Present',
+//      dateTime: new Date().getFullYear().toString(),
+//      },
 //    },
   ]
 
