@@ -9,5 +9,3 @@ on:
 jobs:
   call-docker-build:
     uses: Jannik-Schroeder/workflows/.github/workflows/docker-build-node.yaml@main
-    secrets:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
