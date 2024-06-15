@@ -9,3 +9,7 @@ on:
 jobs:
   call-docker-build:
     uses: Jannik-Schroeder/workflows/.github/workflows/docker-build-node.yaml@main
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
