@@ -12,6 +12,7 @@ import {
   XIcon,
 } from '@/components/SocialIcons'
 import logoUni from '@/images/logos/unipaderborn.png'
+import logoErzbistum from '@/images/logos/erzbistum.png'
 import image1 from '@/images/photos/image-1.jpg'
 import image2 from '@/images/photos/image-2.jpg'
 import image3 from '@/images/photos/image-3.jpg'
@@ -189,6 +190,16 @@ function Resume() {
       logo: logoUni,
       start: 'August 2021',
       end: 'June 2023',
+    },
+    {
+      company: 'Erzbistum Paderborn',
+      title: 'IT Support Technician (AD)',
+      logo: logoErzbistum,
+      start: 'July 2023',
+      end: {
+        label: 'Present',
+        dateTime: new Date().getFullYear().toString(),
+      },
     },
     //    {
     //      company: 'Starbucks',
