@@ -189,13 +189,13 @@ function Resume() {
       title: 'Apprenticeship System Admin',
       logo: logoUni,
       start: 'August 2021',
-      end: 'June 2023',
+      end: 'June 2024',
     },
     {
       company: 'Erzbistum Paderborn',
       title: 'IT Support Technician (AD)',
       logo: logoErzbistum,
-      start: 'July 2023',
+      start: 'July 2024',
       end: {
         label: 'Present',
         dateTime: new Date().getFullYear().toString(),
