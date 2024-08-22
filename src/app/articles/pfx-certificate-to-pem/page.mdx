@@ -1,0 +1,67 @@
+import { ArticleLayout } from '@/components/ArticleLayout'
+
+export const article = {
+    author: 'Jannik Schröder',
+    date: '2024-08-22',
+    title: 'Converting a Windows PFX Certificate to PEM for Linux',
+    description:
+        "This article details the steps I took to convert a Windows PFX certificate into a PEM format, making it usable on Linux systems. I encountered the challenge of only having a PFX certificate and needed to find a solution to use it in my Linux environment, specifically with NGINX.",
+}
+
+export const metadata = {
+    title: article.title,
+    description: article.description,
+}
+
+export default (props) => <ArticleLayout article={article} {...props} />
+
+## Converting a Windows PFX Certificate to PEM for Linux
+
+In my recent experience upgrading my home network infrastructure, I encountered a challenge that many system administrators might find familiar: I had a Windows PFX certificate but needed to use it in a Linux environment. Specifically, I wanted to use it with an NGINX web server, which requires PEM-formatted certificates.
+
+After some research and testing, I found a straightforward method to convert the PFX certificate into the necessary PEM format. Here’s how I did it:
+
+### Step 1: Extracting the Private Key from the PFX File
+
+The first step involves extracting the private key from the PFX file. This is done while keeping the key protected with a password:
+
+```bash
+openssl pkcs12 -in windowszertifikat.pfx -nocerts -out linux.pem
+```
+
+This command extracts the private key and saves it to a file named `linux.pem`.
+
+### Step 2: Extracting the Certificate from the PFX File
+
+Next, I extracted the actual certificate from the PFX file:
+
+```bash
+openssl pkcs12 -in windowszertifikat.pfx -clcerts -nokeys -out linuxzertifikat.pem
+```
+
+This command outputs the certificate into a file named `linuxzertifikat.pem`.
+
+### Step 3: Removing the Password from the Private Key
+
+To make the private key easier to use, I removed the password protection:
+
+```bash
+openssl rsa -in linux.pem -out linux.key
+```
+
+This command creates a password-free private key file named `linux.key`.
+
+### Using the Converted Certificate in NGINX
+
+With the conversion complete, I was able to configure my NGINX server to use the new PEM-formatted certificate and key:
+
+```bash
+ssl_certificate /etc/ssl/certs/linuxzertifikat.pem;
+ssl_certificate_key /etc/ssl/private/linux.key;
+```
+
+### Conclusion
+
+This process made it possible to utilize the Windows PFX certificate in my Linux environment, ensuring secure communications for my newly upgraded network. I hope this guide helps others who might face a similar challenge.
+
+Thank you for reading, and if you found this guide helpful, my family and I would greatly appreciate your support (donations are properly taxed!).
