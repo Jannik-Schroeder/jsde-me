@@ -264,14 +264,15 @@ export default async function Home() {
       <Container className="mt-9">
         <div className="max-w-2xl">
           <h1 className="text-4xl font-bold tracking-tight text-zinc-800 sm:text-5xl dark:text-zinc-100">
-            System Administrator, founder, and amateur martial artist.
+            System Administrator, founder, and motorcycle enthusiast.
           </h1>
           <p className="mt-6 text-base text-zinc-600 dark:text-zinc-400">
-            I&apos;m Jannik a German system administrator with a passion for all
-            things Linux. I specialize in building robust data pipelines and
+            I&apos;m Jannik, a German system administrator with a passion for
+            all things Linux. I specialize in building robust data pipelines and
             automating tasks for my HomeLab Project. In my pursuit of continuous
             improvement, I&apos;m currently exploring ways to enhance redundancy
-            and resilience.
+            and resilience. In my free time, I enjoy riding my motorcycle, a
+            Ninja 650, and driving cars.
           </p>
           <div className="mt-6 flex gap-6">
             <SocialLink
