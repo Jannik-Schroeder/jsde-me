@@ -13,6 +13,7 @@ import {
 } from '@/components/SocialIcons'
 import logoUni from '@/images/logos/unipaderborn.png'
 import logoErzbistum from '@/images/logos/erzbistum.png'
+import logoE2ex from '@/images/logos/e2ex.png'
 import image1 from '@/images/photos/image-1.jpg'
 import image2 from '@/images/photos/image-2.jpg'
 import image3 from '@/images/photos/image-3.jpg'
@@ -20,6 +21,7 @@ import image4 from '@/images/photos/image-4.jpg'
 import image5 from '@/images/photos/image-5.jpg'
 import { type ArticleWithSlug, getAllArticles } from '@/lib/articles'
 import { formatDate } from '@/lib/formatDate'
+import { useMemo } from 'react'
 
 function MailIcon(props: React.ComponentPropsWithoutRef<'svg'>) {
   return (
@@ -183,36 +185,48 @@ function Role({ role }: { role: Role }) {
 }
 
 function Resume() {
-  let resume: Array<Role> = [
-    {
-      company: 'University of Paderborn',
-      title: 'Apprenticeship System Admin',
-      logo: logoUni,
-      start: 'August 2021',
-      end: 'June 2024',
-    },
-    {
-      company: 'Erzbistum Paderborn',
-      title: 'IT Support Technician (AD)',
-      logo: logoErzbistum,
-      start: 'July 2024',
-      end: {
-        label: 'Present',
-        dateTime: new Date().getFullYear().toString(),
+  const resume = useMemo(() => {
+    let roles: Array<Role> = [
+      {
+        company: 'e2ex OÜ',
+        title: 'Co-Founder',
+        logo: logoE2ex,
+        start: 'December 2023',
+        end: {
+          label: 'Present',
+          dateTime: new Date().getFullYear().toString(),
+        },
       },
-    },
-    //    {
-    //      company: 'Starbucks',
-    //      title: 'Shift Supervisor',
-    //      logo: logoStarbucks,
-    //      start: '2008',
+      {
+        company: 'Erzbistum Paderborn',
+        title: 'IT Support Technician (AD)',
+        logo: logoErzbistum,
+        start: 'July 2024',
+        end: {
+          label: 'Present',
+          dateTime: new Date().getFullYear().toString(),
+        },
+      },
+      {
+        company: 'University of Paderborn',
+        title: 'Apprenticeship System Admin',
+        logo: logoUni,
+        start: 'August 2021',
+        end: 'June 2024',
+      },
+    ]
 
-    //      end: {
-    //      label: 'Present',
-    //      dateTime: new Date().getFullYear().toString(),
-    //      },
-    //    },
-  ]
+    // Sort roles by date (latest roles at the top). If both are "Present", keep both at the top.
+    return roles.sort((a, b) => {
+      const aEnd = typeof a.end === 'string' ? a.end : a.end.dateTime
+      const bEnd = typeof b.end === 'string' ? b.end : b.end.dateTime
+
+      if (aEnd === 'Present' && bEnd !== 'Present') return -1
+      if (aEnd !== 'Present' && bEnd === 'Present') return 1
+
+      return new Date(b.start).getTime() - new Date(a.start).getTime()
+    })
+  }, [])
 
   return (
     <div className="rounded-2xl border border-zinc-100 p-6 dark:border-zinc-700/40">
