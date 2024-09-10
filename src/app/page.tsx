@@ -218,13 +218,18 @@ function Resume() {
 
     // Sort roles by date (latest roles at the top). If both are "Present", keep both at the top.
     return roles.sort((a, b) => {
+      // Handle different types of start and end
+      const aStart = typeof a.start === 'string' ? a.start : a.start.dateTime
+      const bStart = typeof b.start === 'string' ? b.start : b.start.dateTime
+
       const aEnd = typeof a.end === 'string' ? a.end : a.end.dateTime
       const bEnd = typeof b.end === 'string' ? b.end : b.end.dateTime
 
       if (aEnd === 'Present' && bEnd !== 'Present') return -1
       if (aEnd !== 'Present' && bEnd === 'Present') return 1
 
-      return new Date(b.start).getTime() - new Date(a.start).getTime()
+      // Compare the start dates
+      return new Date(bStart).getTime() - new Date(aStart).getTime()
     })
   }, [])
 
