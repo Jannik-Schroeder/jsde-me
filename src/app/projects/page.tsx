@@ -17,7 +17,7 @@ const projects = [
     name: 'Wanngehalt.de',
     description:
       'Wanngehalt.de is a website that calculates the last working day of the month on which the salary should be paid. It is open source and you can find the code on GitHub.',
-    link: { href: 'https://wangehalt.de', label: 'wanngehalt.de' },
+    link: { href: 'https://wanngehalt.de', label: 'wanngehalt.de' },
   },
   {
     name: 'Portfolio',
