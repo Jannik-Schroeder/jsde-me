@@ -1,0 +1,127 @@
+import { ArticleLayout } from '@/components/ArticleLayout'
+
+export const article = {
+    author: 'Jannik Schröder',
+    date: '2024-12-10',
+    title: 'Setting up OpenHAB: A Complete Installation Guide',
+    description:
+        'A step-by-step guide to installing OpenHAB on Linux, covering the entire process from initial setup to verification, based on real-world experience and practical tips.',
+}
+
+export const metadata = {
+    title: article.title,
+    description: article.description,
+}
+
+export default (props) => <ArticleLayout article={article} {...props} />
+
+## Introduction
+
+Setting up OpenHAB can be a straightforward process if you follow the right steps. In this guide, I'll walk you through my experience of installing OpenHAB on a Linux system, sharing practical tips I learned along the way.
+
+## Prerequisites
+
+Before we begin, make sure you have:
+- A Linux system (I used Debian)
+- Root or sudo access
+- Basic command line knowledge
+- Java 17 or later
+
+## Installing Java
+
+First, let's install the required Java version. OpenHAB runs best with OpenJDK 17:
+
+```bash
+sudo apt update
+sudo apt install openjdk-17-jre-headless
+```
+
+Verify the installation with:
+```bash
+java -version
+```
+
+## Adding the OpenHAB Repository
+
+Next, we'll add the official OpenHAB repository. I found this to be the most reliable way to install OpenHAB:
+
+```bash
+# Add the GPG key
+curl -fsSL "https://openhab.jfrog.io/artifactory/api/gpg/key/public" | gpg --dearmor > openhab.gpg
+sudo mkdir -p /usr/share/keyrings
+sudo mv openhab.gpg /usr/share/keyrings
+sudo chmod u=rw,g=r,o=r /usr/share/keyrings/openhab.gpg
+
+# Add the repository
+echo 'deb [signed-by=/usr/share/keyrings/openhab.gpg] https://openhab.jfrog.io/artifactory/openhab-linuxpkg stable main' | sudo tee /etc/apt/sources.list.d/openhab.list
+```
+
+## Installing OpenHAB
+
+Now for the main installation:
+
+```bash
+sudo apt-get update
+sudo apt-get install openhab
+sudo apt-get install openhab-addons
+```
+
+Pro tip: To prevent automatic updates that might break your setup:
+```bash
+sudo apt-mark hold openhab
+sudo apt-mark hold openhab-addons
+```
+
+## Starting OpenHAB
+
+Getting OpenHAB up and running:
+
+```bash
+sudo systemctl start openhab.service
+sudo systemctl enable openhab.service
+sudo systemctl daemon-reload
+```
+
+## Verifying the Installation
+
+Here's how I verify everything is working correctly:
+
+```bash
+# Check the service status
+sudo systemctl status openhab.service
+
+# Monitor the logs
+sudo tail -f /var/log/openhab/openhab.log
+```
+
+## Accessing the Web Interface
+
+Once everything is running, you can access the web interface at:
+`http://your-server-ip:8080`
+
+## Important Directories
+
+During my setup, these directories proved essential:
+- `/etc/openhab/` - Configuration files
+- `/var/log/openhab/` - Log files
+- `/var/lib/openhab/` - Runtime data
+
+## Troubleshooting Tips
+
+From my experience, if you encounter issues:
+1. Always check the logs first
+2. Verify Java is installed correctly
+3. Ensure all services are running
+4. Check file permissions
+
+## Next Steps
+
+Now that you have OpenHAB installed, stay tuned for the next articles in this series where we'll cover:
+- Setting up Zigbee2MQTT
+- Configuring RaspberryMatic
+- Setting up channels for lights
+- Configuring Apple HomeKit metadata
+
+## Conclusion
+
+The installation process might seem daunting at first, but following these steps should give you a solid OpenHAB foundation. In the next article, we'll dive into setting up Zigbee2MQTT to start connecting actual devices.
