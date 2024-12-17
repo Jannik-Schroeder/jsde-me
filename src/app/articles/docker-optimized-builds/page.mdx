@@ -1,0 +1,109 @@
+import { ArticleLayout } from '@/components/ArticleLayout'
+
+export const article = {
+  author: 'Jannik Schröder',
+  date: '2024-12-17',
+  title: 'Docker Image Optimization: A Tale of Layers and Efficiency',
+  description:
+    'How I drastically reduced my Docker image sizes by better understanding layers - a practical journey.',
+}
+
+export const metadata = {
+  title: article.title,
+  description: article.description,
+}
+
+export default (props) => <ArticleLayout article={article} {...props} />
+
+The other day, I was sitting at my desk, looking at my Docker builds. What I saw was... well, let's say there was room for improvement. My images were as bloated as a hot air balloon, and the build times were long enough to make a coffee run. Time for a change!
+
+## From Mountain to Molehill
+
+My original Dockerfile looked pretty straightforward - a single stage, everything in one go:
+
+```dockerfile
+FROM node:22-alpine
+WORKDIR /app
+COPY . .
+RUN npm i
+RUN npm run live
+RUN rm -f .npmrc
+# ... and so on
+```
+
+At first glance, it doesn't look too bad, right? But there's a hidden problem: each command creates a new layer, and these layers carry around a lot of unnecessary baggage.
+
+## The Power of Multi-Stage Builds
+
+After some research and quite a bit of coffee, I had an epiphany: Multi-Stage Builds! Here's my new, optimized version:
+
+```dockerfile
+# Build stage
+FROM node:22-slim AS builder
+WORKDIR /app
+RUN apt-get update && apt-get install -y \
+    python3 \
+    make \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
+COPY package*.json tsconfig.json ./
+COPY prisma ./prisma/
+RUN npm ci
+COPY . .
+RUN npm run build
+# ... and the rest of the build stage
+```
+
+## Why is This Better?
+
+Think of Docker layers like a lasagna. In my old version, I had a lasagna where each layer contained all the ingredients - too heavy and unnecessarily complex. The new version separates the preparation (build stage) from the final dish (production stage).
+
+The real trick lies in the order: I first copy the files that rarely change (like `package.json`), and only at the very end the frequently changing source code. Docker is clever and uses its layer caching - if a file hasn't changed, the corresponding layer doesn't need to be rebuilt.
+
+## The Results?
+
+- Smaller images: Instead of a complete development environment, the final image contains only the essentials
+- Faster builds: Thanks to smart layer caching
+- Better security: Less attack surface due to fewer packages
+
+## The Secret Sauce
+
+The best part comes last: Using `distroless` as the base for the production image. It's like a tiny house - only the essentials, but perfectly organized:
+
+```dockerfile
+FROM gcr.io/distroless/nodejs22-debian12
+WORKDIR /app
+COPY --from=builder /app/dist ./dist
+# ... minimal configuration
+```
+
+Let's break down what makes this so much better:
+
+1. Separate build environment: All the build tools stay in the builder stage
+2. Minimal runtime: The production image only contains what's needed to run the app
+3. Clean slate: No development dependencies or build artifacts in the final image
+
+## The Layer Game
+
+One fascinating aspect of this optimization is how it plays into Docker's layer caching system. In the original version, if I changed one line of code, almost everything would need to be rebuilt. Now, Docker can reuse cached layers for unchanged components like `package.json` and node modules.
+
+Think of it like this: If you're making sandwiches, you don't wash and chop all the ingredients every time - you keep the prepared ingredients ready. That's exactly what layer caching does for our Docker builds.
+
+## Conclusion
+
+This optimization didn't just reduce my image sizes dramatically; it also shortened build times significantly. It's like packing for a trip - if you think about what you really need and in what order you pack it, you save yourself a lot of hassle.
+
+What I learned: With Docker images, less is often more. Each layer should serve a purpose, and with a bit of planning, you can optimize quite a lot. 
+
+And the best part? My coffee breaks are now actually coffee breaks again - not build-time fillers! 😉
+
+## Quick Tips for Your Own Optimization
+
+- Start with a slim base image
+- Use multi-stage builds to separate build and runtime environments
+- Order your layers from least to most frequently changing
+- Only copy what you need into the final image
+- Clean up after each RUN command in the same layer
+
+Remember: Every layer you add is like adding another floor to a building - make sure it's necessary and well-structured!
+
