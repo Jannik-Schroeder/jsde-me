@@ -1,0 +1,136 @@
+import { ArticleLayout } from '@/components/ArticleLayout'
+
+export const article = {
+    author: 'Jannik Schröder',
+    date: '2024-12-21',
+    title: 'Setting up Zigbee2MQTT: A Smart Home Adventure',
+    description:
+        'My journey through setting up Zigbee2MQTT - from initial struggles to a working smart home setup, with all the technical details you need.',
+}
+
+export const metadata = {
+    title: article.title,
+    description: article.description,
+}
+
+export default (props) => <ArticleLayout article={article} {...props} />
+
+After getting OpenHAB up and running (check out my previous article if you haven't!), I found myself staring at my Zigbee USB stick, thinking, "Alright, let's get this party started!" Little did I know I was about to dive into one of the most satisfying setup experiences of my smart home journey.
+
+## The Starting Line
+
+First things first - let's get our Node.js environment ready. I went with version 20.x because, well, why not use the latest stable version? Here's what I did:
+
+```bash
+sudo curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt-get install -y nodejs git make g++ gcc libsystemd-dev
+```
+
+Quick sanity check (because we all love seeing those version numbers):
+```bash
+node -v
+npm -v
+```
+
+## The Main Event: Installing Zigbee2MQTT
+
+I'm a big fan of keeping things organized, so I went straight for the /opt directory. It's like that one drawer in your kitchen where everything actually has its place:
+
+```bash
+sudo mkdir /opt/zigbee2mqtt
+sudo chown -R ${USER}: /opt/zigbee2mqtt
+git clone --depth 1 https://github.com/Koenkk/zigbee2mqtt.git /opt/zigbee2mqtt
+cd /opt/zigbee2mqtt
+npm ci
+npm run build
+```
+
+## Configuration: Where the Magic Happens
+
+After some trial and error (okay, maybe more error than trial initially), I landed on this configuration that works like a charm:
+
+```yaml
+homeassistant: false
+frontend:
+  port: 8081
+mqtt:
+  base_topic: zigbee2mqtt
+  server: mqtt://localhost
+  keepalive: 60
+  reject_unauthorized: true
+  version: 4
+serial:
+  port: /dev/ttyACM0
+advanced:
+  network_key: [99, 108, 107, 85, 224, 167, 57, 124, 147, 107, 86, 183, 16, 144, 200, 111]
+  pan_id: 6414
+  ext_pan_id: [235, 0, 247, 117, 75, 177, 199, 83]
+```
+
+## The MQTT Broker: Your Smart Home's Post Office
+
+Every good smart home needs a reliable message broker. Think of it as your smart home's postal service:
+
+```bash
+apt-get install mosquitto
+systemctl start mosquitto
+```
+
+## USB Permissions: The "Who Can Talk to Who" Game
+
+This part was tricky - getting the USB permissions right is like solving a puzzle where all the pieces are the same color. After some head-scratching, here's what worked:
+
+```bash
+sudo usermod -a -G dialout $USER
+sudo chown root:dialout /dev/ttyACM0
+sudo chmod 660 /dev/ttyACM0
+```
+
+## Making It Stick: The System Service
+
+Nobody wants to manually start their smart home services after every reboot (been there, done that, got the t-shirt). Here's my systemd service configuration:
+
+```ini
+[Unit]
+Description=Zigbee2MQTT
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/npm start
+WorkingDirectory=/opt/zigbee2mqtt
+StandardOutput=inherit
+StandardError=inherit
+Restart=always
+User=root
+
+[Install]
+WantedBy=multi-target.target
+```
+
+Get it running:
+```bash
+sudo systemctl start zigbee2mqtt
+sudo systemctl enable zigbee2mqtt
+```
+
+## The Fun Part: Web Interface and Device Pairing
+
+Once everything was up and running, I could access the web interface at `http://your-server-ip:8081` - and let me tell you, it's pretty slick! I spent the next hour happily pairing all my devices, watching them pop up one by one in the interface. The best part? Everything gets automatically saved in your configuration.yaml, so you can always see what's what.
+
+## When Things Go Sideways: Troubleshooting
+
+Look, we've all been there. Here's what to check when things don't go as planned:
+1. USB permissions (yes, again - they're sneaky)
+2. MQTT broker status (is our postal service running?)
+3. Logs via `npm start` (your best friend in debugging)
+4. Zigbee controller recognition (sometimes they're shy)
+
+## What's Next?
+
+Stay tuned for my next article where I'll show you how to connect this whole setup to OpenHAB. We'll dive into MQTT integration, device control, and all that good stuff. Trust me, it's going to be fun!
+
+## The Bottom Line
+
+Setting up Zigbee2MQTT might seem daunting at first, but once you get it running, it's like watching a well-oiled machine in action. The web interface makes device management a breeze, and seeing all your devices work together is incredibly satisfying.
+
+After successfully pairing all my devices (which you can see neatly organized in the configuration), I'm ready to take the next step: integrating everything with OpenHAB. But that's a story for another article! 😉
