@@ -3,6 +3,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import clsx from 'clsx'
 
+import Resume from '@/components/Resume'
 import { Container } from '@/components/Container'
 import {
   GitHubIcon,
@@ -122,11 +123,12 @@ export default function About() {
             <SocialLink
                 href="mailto:contact@jsde.me"
                 icon={MailIcon}
-                className="mt-8 border-t border-zinc-100 pt-8 dark:border-zinc-700/40"
+                className="mt-8 mb-8 border-t border-zinc-100 pt-8 dark:border-zinc-700/40"
             >
               contact@jsde.me
             </SocialLink>
           </ul>
+          <Resume />
         </div>
       </div>
     </Container>
