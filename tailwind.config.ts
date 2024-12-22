@@ -1,6 +1,5 @@
 import typographyPlugin from '@tailwindcss/typography'
 import { type Config } from 'tailwindcss'
-
 import typographyStyles from './typography'
 
 export default {
@@ -22,6 +21,17 @@ export default {
       '7xl': ['4.5rem', { lineHeight: '1' }],
       '8xl': ['6rem', { lineHeight: '1' }],
       '9xl': ['8rem', { lineHeight: '1' }],
+    },
+    extend: {
+      keyframes: {
+        marquee: {
+          '0%': { transform: 'translateX(0%)' },
+          '100%': { transform: 'translateX(-50%)' }
+        },
+      },
+      animation: {
+        marquee: 'marquee 40s linear infinite',
+      },
     },
     typography: typographyStyles,
   },
