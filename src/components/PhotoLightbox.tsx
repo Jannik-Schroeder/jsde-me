@@ -1,6 +1,6 @@
 'use client'
 
-import { Fragment, useEffect, useState } from 'react'
+import { Fragment, useEffect, useState, useRef } from 'react'
 import Image, { StaticImageData } from 'next/image'
 import { Dialog, Transition } from '@headlessui/react'
 import { PhotoMetadata } from '@/lib/gallery'
@@ -72,12 +72,13 @@ export function PhotoLightbox({
 }: PhotoLightboxProps) {
   const [isImageLoaded, setIsImageLoaded] = useState(false)
   const [displayIndex, setDisplayIndex] = useState(currentIndex)
+  const touchStartX = useRef<number>(0)
+  const touchEndX = useRef<number>(0)
 
   // Update display index when currentIndex changes
   useEffect(() => {
     if (currentIndex !== displayIndex) {
       setIsImageLoaded(false)
-      // Small delay to allow fade out
       const timer = setTimeout(() => {
         setDisplayIndex(currentIndex)
       }, 150)
@@ -110,6 +111,30 @@ export function PhotoLightbox({
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [isOpen, onClose, onNext, onPrevious])
 
+  // Touch handlers for swipe gestures
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX
+  }
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    touchEndX.current = e.touches[0].clientX
+  }
+
+  const handleTouchEnd = () => {
+    const swipeThreshold = 50
+    const diff = touchStartX.current - touchEndX.current
+
+    if (Math.abs(diff) > swipeThreshold) {
+      if (diff > 0 && onNext) {
+        // Swipe left - next image
+        onNext()
+      } else if (diff < 0 && onPrevious) {
+        // Swipe right - previous image
+        onPrevious()
+      }
+    }
+  }
+
   if (!isOpen || !photos[displayIndex]) return null
 
   const photo = photos[displayIndex]
@@ -131,11 +156,11 @@ export function PhotoLightbox({
           leaveFrom="opacity-100"
           leaveTo="opacity-0"
         >
-          <div className="fixed inset-0 bg-black/90 backdrop-blur-sm transition-opacity" />
+          <div className="fixed inset-0 bg-black/95 transition-opacity" />
         </Transition.Child>
 
         <div className="fixed inset-0 z-10 overflow-hidden">
-          <div className="flex h-full items-center justify-center p-4">
+          <div className="flex h-full items-center justify-center">
             <Transition.Child
               as={Fragment}
               enter="ease-out duration-300"
@@ -145,21 +170,21 @@ export function PhotoLightbox({
               leaveFrom="opacity-100 scale-100"
               leaveTo="opacity-0 scale-95"
             >
-              <Dialog.Panel className="relative flex h-full w-full max-w-7xl transform items-center justify-center transition-all">
+              <Dialog.Panel className="relative flex h-full w-full transform flex-col transition-all md:max-w-7xl md:items-center md:justify-center md:p-4">
                 {/* Close button */}
                 <button
                   onClick={onClose}
-                  className="absolute right-0 top-0 z-10 rounded-full bg-white/10 p-2 text-white backdrop-blur transition hover:bg-white/20"
+                  className="absolute right-2 top-2 z-10 rounded-full bg-white/10 p-2 text-white backdrop-blur transition hover:bg-white/20 md:right-0 md:top-0"
                   aria-label="Close"
                 >
-                  <CloseIcon className="h-6 w-6" />
+                  <CloseIcon className="h-5 w-5 md:h-6 md:w-6" />
                 </button>
 
-                {/* Navigation buttons */}
+                {/* Desktop Navigation buttons */}
                 {onPrevious && (
                   <button
                     onClick={onPrevious}
-                    className="absolute left-4 top-1/2 z-10 -translate-y-1/2 rounded-full bg-white/10 p-3 text-white backdrop-blur transition hover:bg-white/20"
+                    className="absolute left-4 top-1/2 z-10 hidden -translate-y-1/2 rounded-full bg-white/10 p-3 text-white backdrop-blur transition hover:bg-white/20 md:block"
                     aria-label="Previous photo"
                   >
                     <ChevronLeftIcon className="h-6 w-6" />
@@ -168,16 +193,92 @@ export function PhotoLightbox({
                 {onNext && (
                   <button
                     onClick={onNext}
-                    className="absolute right-4 top-1/2 z-10 -translate-y-1/2 rounded-full bg-white/10 p-3 text-white backdrop-blur transition hover:bg-white/20"
+                    className="absolute right-4 top-1/2 z-10 hidden -translate-y-1/2 rounded-full bg-white/10 p-3 text-white backdrop-blur transition hover:bg-white/20 md:block"
                     aria-label="Next photo"
                   >
                     <ChevronRightIcon className="h-6 w-6" />
                   </button>
                 )}
 
-                {/* Content container */}
+                {/* Mobile: Vertical layout always */}
+                <div className="flex h-full w-full flex-col md:hidden">
+                  {/* Image container with touch handlers */}
+                  <div
+                    className="relative flex flex-1 items-center justify-center"
+                    onTouchStart={handleTouchStart}
+                    onTouchMove={handleTouchMove}
+                    onTouchEnd={handleTouchEnd}
+                  >
+                    <div
+                      className={`transition-opacity duration-300 ${
+                        isImageLoaded ? 'opacity-100' : 'opacity-0'
+                      }`}
+                    >
+                      <Image
+                        src={photo.src}
+                        alt=""
+                        className="h-auto w-full object-contain"
+                        style={{
+                          maxHeight: 'calc(100vh - 200px)',
+                        }}
+                        priority
+                        onLoad={() => setIsImageLoaded(true)}
+                      />
+                    </div>
+
+                    {!isImageLoaded && (
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <div className="h-12 w-12 animate-spin rounded-full border-4 border-white/20 border-t-white" />
+                      </div>
+                    )}
+
+                    {/* Preload adjacent images */}
+                    <div className="hidden">
+                      <Image src={photos[nextIndex].src} alt="" priority />
+                      <Image src={photos[prevIndex].src} alt="" priority />
+                    </div>
+                  </div>
+
+                  {/* Mobile metadata - compact at bottom */}
+                  <div className="flex-shrink-0 bg-black/80 p-4 backdrop-blur">
+                    <div className="flex items-center justify-between text-xs text-zinc-400">
+                      <span>
+                        {displayIndex + 1} / {photos.length}
+                      </span>
+                      <span>Swipe to navigate</span>
+                    </div>
+                    <div className="mt-3 space-y-2 text-sm text-white">
+                      {photo.metadata.camera && (
+                        <div className="font-medium">
+                          {photo.metadata.camera}
+                        </div>
+                      )}
+                      <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-zinc-300">
+                        {photo.metadata.focalLength && (
+                          <span>{photo.metadata.focalLength}</span>
+                        )}
+                        {photo.metadata.aperture && (
+                          <span>{photo.metadata.aperture}</span>
+                        )}
+                        {photo.metadata.shutterSpeed && (
+                          <span>{photo.metadata.shutterSpeed}</span>
+                        )}
+                        {photo.metadata.iso && (
+                          <span>ISO {photo.metadata.iso}</span>
+                        )}
+                      </div>
+                      {photo.metadata.date && (
+                        <div className="text-xs text-zinc-400">
+                          {photo.metadata.date}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Desktop: Original adaptive layout */}
                 <div
-                  className={`flex max-h-full w-full gap-6 transition-opacity duration-300 ${
+                  className={`hidden h-full w-full gap-6 transition-opacity duration-300 md:flex ${
                     isImageLoaded ? 'opacity-100' : 'opacity-0'
                   } ${
                     isPortrait
@@ -207,14 +308,14 @@ export function PhotoLightbox({
                       onLoad={() => setIsImageLoaded(true)}
                     />
 
-                    {/* Preload adjacent images (hidden) */}
+                    {/* Preload adjacent images */}
                     <div className="hidden">
                       <Image src={photos[nextIndex].src} alt="" priority />
                       <Image src={photos[prevIndex].src} alt="" priority />
                     </div>
                   </div>
 
-                  {/* Metadata */}
+                  {/* Desktop metadata */}
                   <div
                     className={`flex-shrink-0 rounded-lg bg-white/5 p-6 backdrop-blur ${
                       isPortrait ? 'w-80' : 'w-full'
@@ -293,9 +394,9 @@ export function PhotoLightbox({
                   </div>
                 </div>
 
-                {/* Loading indicator */}
+                {/* Desktop loading indicator */}
                 {!isImageLoaded && (
-                  <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="absolute inset-0 hidden items-center justify-center md:flex">
                     <div className="h-12 w-12 animate-spin rounded-full border-4 border-white/20 border-t-white" />
                   </div>
                 )}
