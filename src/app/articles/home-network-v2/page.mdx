@@ -1,4 +1,7 @@
+import Image from 'next/image'
 import { ArticleLayout } from '@/components/ArticleLayout'
+import rackFront from './rack_front.JPEG'
+import rackBack from './rack_back.JPEG'
 
 export const article = {
     author: 'Jannik Schröder',
@@ -54,10 +57,15 @@ The switch topology is built around a **USW Aggregation** as the Top-of-Rack (To
 
 This topology ensures **10 Gbps uplinks between every switch** - no bottlenecks anywhere in the backbone.
 
-{/* TODO: Add image of server rack with new setup */}
-<div style={{ padding: '40px', background: 'var(--tw-prose-pre-bg)', borderRadius: '8px', textAlign: 'center', margin: '20px 0' }}>
-    <p style={{ color: 'var(--tw-prose-body)', margin: 0 }}>📷 Server Rack Image Placeholder</p>
-    <p style={{ color: 'var(--tw-prose-body)', fontSize: '0.875rem', margin: '8px 0 0 0' }}>Images of the new UniFi setup coming soon</p>
+<div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem', margin: '20px 0' }}>
+    <figure style={{ flex: '1 1 48%', margin: 0, minWidth: '280px' }}>
+        <Image src={rackFront} alt="Server rack front view with PoE switches" style={{ width: '100%', height: 'auto', borderRadius: '8px' }} />
+        <figcaption style={{ fontSize: '0.875rem', color: 'var(--tw-prose-body)', marginTop: '8px' }}>Rack front – PoE switches and access gear</figcaption>
+    </figure>
+    <figure style={{ flex: '1 1 48%', margin: 0, minWidth: '280px' }}>
+        <Image src={rackBack} alt="Server rack rear view with ToR (Top-of-Rack) switch" style={{ width: '100%', height: 'auto', borderRadius: '8px' }} />
+        <figcaption style={{ fontSize: '0.875rem', color: 'var(--tw-prose-body)', marginTop: '8px' }}>Rack back – USW Aggregation (ToR) and fiber uplinks</figcaption>
+    </figure>
 </div>
 
 ### WiFi
