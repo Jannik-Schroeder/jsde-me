@@ -8,14 +8,20 @@ import photo1 from '@/images/gallery/DSC00019.jpg'
 import photo2 from '@/images/gallery/DSC00031.jpg'
 import photo3 from '@/images/gallery/DSC00036.jpg'
 import photo4 from '@/images/gallery/DSC00050.jpg'
-import photo5 from '@/images/gallery/DSC00063.jpg'
-import photo6 from '@/images/gallery/DSC00072.jpg'
-import photo7 from '@/images/gallery/DSC00085.jpg'
-import photo8 from '@/images/gallery/DSC00086-3.jpg'
-import photo9 from '@/images/gallery/DSC00104.jpg'
-import photo10 from '@/images/gallery/DSC00393.jpg'
-import photo11 from '@/images/gallery/DSC00426.jpg'
-import photo12 from '@/images/gallery/DSC00610.jpg'
+import photo5 from '@/images/gallery/DSC00062.jpg'
+import photo6 from '@/images/gallery/DSC00063.jpg'
+import photo7 from '@/images/gallery/DSC00072.jpg'
+import photo8 from '@/images/gallery/DSC00085.jpg'
+import photo9 from '@/images/gallery/DSC00086-3.jpg'
+import photo10 from '@/images/gallery/DSC00104.jpg'
+import photo11 from '@/images/gallery/DSC00393.jpg'
+import photo12 from '@/images/gallery/DSC00419.jpg'
+import photo13 from '@/images/gallery/DSC00426.jpg'
+import photo14 from '@/images/gallery/DSC00443.jpg'
+import photo15 from '@/images/gallery/DSC00537.jpg'
+import photo16 from '@/images/gallery/DSC00610.jpg'
+import photo17 from '@/images/gallery/DSC00628.jpg'
+import photo18 from '@/images/gallery/DSC00642.jpg'
 
 export const galleryImages: StaticImageData[] = [
   photo0,
@@ -31,6 +37,12 @@ export const galleryImages: StaticImageData[] = [
   photo10,
   photo11,
   photo12,
+  photo13,
+  photo14,
+  photo15,
+  photo16,
+  photo17,
+  photo18,
 ]
 
 export const galleryImageFilenames: string[] = [
@@ -39,12 +51,18 @@ export const galleryImageFilenames: string[] = [
   'DSC00031.jpg',
   'DSC00036.jpg',
   'DSC00050.jpg',
+  'DSC00062.jpg',
   'DSC00063.jpg',
   'DSC00072.jpg',
   'DSC00085.jpg',
   'DSC00086-3.jpg',
   'DSC00104.jpg',
   'DSC00393.jpg',
+  'DSC00419.jpg',
   'DSC00426.jpg',
+  'DSC00443.jpg',
+  'DSC00537.jpg',
   'DSC00610.jpg',
+  'DSC00628.jpg',
+  'DSC00642.jpg',
 ]

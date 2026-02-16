@@ -5,18 +5,33 @@ import { Layout } from '@/components/Layout'
 
 import '@/styles/tailwind.css'
 
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'
+
 export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl),
+  authors: [{ name: 'Jannik Schröder', url: siteUrl }],
   title: {
-    template: '%s - Jannik Schröder',
-    default:
-      'Jannik Schröders - System Admin and Founder',
+    template: '%s · Jannik Schröder',
+    default: 'Jannik Schröder · System Administrator & Co-Founder',
   },
   description:
-    'I’m a system administrator and founder. I love to build and automate things. I’m passionate about privacy and security.',
+    'I’m a system administrator and co-founder. I love building and automating things, and I’m passionate about privacy and security.',
   alternates: {
     types: {
-      'application/rss+xml': `${process.env.NEXT_PUBLIC_SITE_URL}/feed.xml`,
+      'application/rss+xml': '/feed.xml',
     },
+  },
+  openGraph: {
+    type: 'website',
+    url: siteUrl,
+    title: 'Jannik Schröder',
+    description:
+      'System administrator and co-founder. Building and automating things with a focus on privacy and security.',
+    siteName: 'Jannik Schröder',
+  },
+  twitter: {
+    card: 'summary',
+    creator: '@jsde_me',
   },
 }
 
