@@ -55,15 +55,15 @@ export default async function Home() {
       <Container className="mt-9">
         <div className="max-w-2xl">
           <h1 className="text-4xl font-bold tracking-tight text-zinc-800 sm:text-5xl dark:text-zinc-100">
-            System Administrator, founder, and motorcycle enthusiast.
+            System Administrator, open source enthusiast, and motorcycle rider.
           </h1>
           <p className="mt-6 text-base text-zinc-600 dark:text-zinc-400">
             I&apos;m Jannik, a German system administrator with a passion for
-            all things Linux. I specialize in building robust data pipelines and
-            automating tasks for my HomeLab Project. In my pursuit of continuous
-            improvement, I&apos;m currently exploring ways to enhance redundancy
-            and resilience. In my free time, I enjoy riding my motorcycle, a
-            KTM Duke 790, and driving cars.
+            open source software and network engineering. I enjoy designing and
+            maintaining complex network infrastructures, contributing to open
+            source projects, and automating tasks in my HomeLab. In my free
+            time, I enjoy riding my motorcycle, a KTM Duke 790, and driving
+            cars.
           </p>
           <div className="mt-6 flex gap-6">
             <SocialLink

@@ -82,10 +82,7 @@ export default function Resume() {
         title: 'Co-Founder',
         logo: logoE2ex,
         start: 'December 2023',
-        end: {
-          label: 'Present',
-          dateTime: new Date().getFullYear().toString(),
-        },
+        end: 'February 2026',
       },
       {
         company: 'Erzbistum Paderborn',

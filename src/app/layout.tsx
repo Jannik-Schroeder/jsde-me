@@ -12,10 +12,10 @@ export const metadata: Metadata = {
   authors: [{ name: 'Jannik Schröder', url: siteUrl }],
   title: {
     template: '%s · Jannik Schröder',
-    default: 'Jannik Schröder · System Administrator & Co-Founder',
+    default: ‘Jannik Schröder · System Administrator & Open Source Enthusiast’,
   },
   description:
-    'I’m a system administrator and co-founder. I love building and automating things, and I’m passionate about privacy and security.',
+    ‘I’m a system administrator with a passion for open source software and network engineering. I love building and automating things.’,
   alternates: {
     types: {
       'application/rss+xml': '/feed.xml',
@@ -26,7 +26,7 @@ export const metadata: Metadata = {
     url: siteUrl,
     title: 'Jannik Schröder',
     description:
-      'System administrator and co-founder. Building and automating things with a focus on privacy and security.',
+      'System administrator passionate about open source and network engineering. Building and automating things in my HomeLab and beyond.',
     siteName: 'Jannik Schröder',
   },
   twitter: {

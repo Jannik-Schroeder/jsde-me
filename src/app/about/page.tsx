@@ -51,7 +51,7 @@ function MailIcon(props: React.ComponentPropsWithoutRef<'svg'>) {
 export const metadata: Metadata = {
   title: 'About',
   description:
-    'I’m Jannik Schröder, a system administrator and co-founder based in Paderborn, Germany.',
+    ‘I’m Jannik Schröder, a system administrator and open source enthusiast based in Paderborn, Germany.’,
 }
 
 export default function About() {
@@ -98,10 +98,9 @@ export default function About() {
               in this quest for technological breakthroughs.
             </p>
             <p>
-              Today, my focus is e2ex OÜ, a beacon of passion and dedication. Here, we don&apos;t just work with technology;
-              we live and breathe it, crafting solutions that are as resilient as they are innovative. As I continue
-              this journey, I am driven by a simple yet profound belief: that in the vast, interconnected world of
-              technology, the only real limit is the horizon of our imagination.
+              Today, my focus lies in open source software and network engineering. I enjoy designing resilient network
+              infrastructures, contributing to open source projects, and pushing the boundaries of what&apos;s possible
+              in my HomeLab — driven by the belief that the only real limit is the horizon of our imagination.
             </p>
           </div>
         </div>
