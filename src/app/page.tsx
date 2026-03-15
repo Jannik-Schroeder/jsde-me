@@ -65,6 +65,18 @@ export default async function Home() {
             time, I enjoy riding my motorcycle, a KTM Duke 790, and driving
             cars.
           </p>
+          <p className="mt-4 text-sm text-zinc-500 dark:text-zinc-400">
+            Interested in my projects? Visit{' '}
+            <a
+              href="https://phanes.net"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-teal-500 hover:text-teal-600 dark:text-teal-400 dark:hover:text-teal-300"
+            >
+              phanes.net
+            </a>
+            .
+          </p>
           <div className="mt-6 flex gap-6">
             <SocialLink
               href="https://twitter.com/jsde_me"
