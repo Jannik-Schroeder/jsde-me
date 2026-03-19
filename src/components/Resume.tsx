@@ -86,13 +86,20 @@ export default function Resume() {
       },
       {
         company: 'Erzbistum Paderborn',
-        title: 'IT Application Manager Hardware',
+        title: 'IT Specialist Cloud & Virtualization (VMware/M365)',
         logo: logoErzbistum,
-        start: 'January 2025',
+        start: 'May 2026',
         end: {
           label: 'Present',
           dateTime: new Date().getFullYear().toString(),
         },
+      },
+      {
+        company: 'Erzbistum Paderborn',
+        title: 'IT Application Manager Hardware',
+        logo: logoErzbistum,
+        start: 'January 2025',
+        end: 'April 2026',
       },
       {
         company: 'Erzbistum Paderborn',
