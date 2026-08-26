@@ -6,6 +6,7 @@ import { useMemo } from 'react'
 import logoUni from '@/images/logos/unipaderborn.png'
 import logoErzbistum from '@/images/logos/erzbistum.png'
 import logoE2ex from '@/images/logos/e2ex.png'
+import logoSelfEmployed from '@/images/logos/avatar.png'
 
 // Types
 interface Role {
@@ -77,6 +78,16 @@ function Role({ role }: { role: Role }) {
 export default function Resume() {
   const resume = useMemo(() => {
     let roles: Array<Role> = [
+      {
+        company: 'Jannik Schröder',
+        title: 'Self-Employed — Web Applications, SaaS & IT Consulting',
+        logo: logoSelfEmployed,
+        start: 'July 2026',
+        end: {
+          label: 'Present',
+          dateTime: new Date().getFullYear().toString(),
+        },
+      },
       {
         company: 'e2ex OÜ',
         title: 'Co-Founder',

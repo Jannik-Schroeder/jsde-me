@@ -1,0 +1,165 @@
+import { ArticleLayout } from '@/components/ArticleLayout'
+
+export const article = {
+    author: 'Jannik Schröder',
+    date: '2026-07-12',
+    title: 'Home Network V3: Goodbye UniFi, Hello OPNsense HA',
+    description:
+        "Six months after going all-in on UniFi, I ripped out the UDM Pro Max again. This is the story of building a truly highly available home network: an OPNsense CARP pair on repurposed Sophos appliances, a MikroTik MLAG core, and all the lessons that came with leaving the walled garden.",
+}
+
+export const metadata = {
+    title: article.title,
+    description: article.description,
+}
+
+export default (props) => <ArticleLayout article={article} {...props} />
+
+## Introduction
+
+In [Home Network V2](/articles/home-network-v2) I went all-in on UniFi. The UDM Pro Max became the heart of everything: routing, firewall, controller, NVR, IDS/IPS. I ended that article saying the ecosystem approach was transformative — and it was. The single pane of glass, Object-Oriented Networking, dynamic VLANs: all of it worked exactly as advertised.
+
+So why is this article titled "Goodbye UniFi"?
+
+Because the more I leaned on the network, the more one fact started to bother me: **everything depended on a single box**. The UDM Pro Max was my router, firewall, DHCP server, DNS resolver, and controller — and there was exactly one of it. A failed power supply or a bad firmware update, and the entire network is dark until a replacement arrives. No amount of 10G fiber backbone fixes that.
+
+V3 is the answer: a fully redundant layer 3 edge built from an **OPNsense high-availability pair** and a **MikroTik MLAG core**, designed so that any single device — firewall or core switch — can die without anyone in the house noticing.
+
+## Why I Left UniFi
+
+To be clear: this is not a "UniFi is bad" article. UniFi is excellent at what it does. But three things pushed me out:
+
+1. **Single point of failure.** UniFi has no real high-availability story for its gateways: no VRRP/CARP equivalent, no config-synced standby, no stateful failover. Shadow Mode exists for some devices, but it is nothing like two independent firewalls with synchronized state.
+2. **I wanted true HA, including state.** An established SSH session or a running download should survive a firewall failover. That requires `pfsync`-style state table replication — something only the open-source firewalls (OPNsense/pfSense) really offer.
+3. **Control.** UniFi abstracts a lot away, which is great until you hit the edge of the abstraction. I wanted raw access to the resolver (Unbound with custom zones), the DHCP server (Kea with proper HA), policy-based routing, and firewall rules I can read as actual `pf` syntax. On the UDM you eventually end up SSH-ing into a box that fights you; on OPNsense the shell *is* the product.
+
+There was also a fourth, softer reason: I had two decommissioned **Sophos SG/XG 330 rev. 2** appliances sitting on a shelf. They are ordinary amd64 machines with ten gigabit ports, two SFP slots and two SFP+ ports each — nearly perfect OPNsense hardware. Free redundancy was staring at me.
+
+## The New Design
+
+The V3 edge looks like this:
+
+- Two Sophos SG/XG 330 appliances running **OPNsense**, clustered with **CARP** (active/passive)
+- Two **MikroTik CRS326-24S+2Q+** switches as the core, clustered with **MLAG**
+- Each firewall connects to *both* core switches via an LACP bond — so any one firewall *and* any one core switch can fail independently
+- The existing UniFi access switches and Wi-Fi 7 APs stay, now managed by a self-hosted controller VM
+
+### Hardware
+
+| Device | Count | Role |
+|--------|-------|------|
+| Sophos SG/XG 330 rev. 2 (repurposed) | 2 | OPNsense CARP pair — routing, firewall, DHCP, DNS, VPN |
+| MikroTik CRS326-24S+2Q+ | 2 | Core switches (MLAG pair), 24x SFP+ / 2x QSFP+ |
+| UniFi switches + U7 APs (from V2) | — | Access layer and Wi-Fi, kept as-is |
+
+The Sophos boxes cost me nothing, and the two CRS326 units together cost less than the single USW Aggregation they replaced — while offering 24 SFP+ ports each instead of 8 total.
+
+## OPNsense HA: CARP, pfsync, and Config Sync
+
+The firewall pair follows the classic three-legged HA pattern:
+
+1. **CARP virtual IPs.** Every VLAN gets three addresses: `.1` is the CARP VIP (the gateway clients actually use), `.2` is node A, `.3` is node B. Node A runs with `advskew 0`, node B with `advskew 100` — A is master, B takes over the moment A stops advertising.
+2. **pfsync.** A dedicated back-to-back link between the two boxes replicates the firewall state table. When B becomes master, established connections keep flowing because B already knows about every state.
+3. **XMLRPC config sync.** Firewall rules, aliases, DHCP reservations and most other settings are pushed from A to B automatically, so the standby never drifts.
+
+One hard-earned lesson here: **not everything syncs, and that's intentional.** Interface assignments, the CARP VIPs themselves, and per-node settings must differ between the boxes (skew 0 vs. 100, `.2` vs. `.3`). Treat the sync as "shared policy", not "cloned box" — and never create rules only on the backup node, because the next sync will silently overwrite them with the master's rule set.
+
+### PPPoE on an HA Pair
+
+My WAN is a PPPoE fiber line, which makes HA slightly awkward: a PPPoE session can only exist once. The trick is OPNsense's `disconnectppps` setting on both nodes — only the current CARP master dials the session. On failover, the new master re-dials, which takes roughly 5–15 seconds. That is the one place where failover is *not* seamless, and it is a fundamental property of PPPoE, not of OPNsense. LAN-to-LAN traffic fails over stateful and instant; the internet blips for a few seconds. A second, CGNAT'd WAN uplink hangs off the pair as a backup gateway.
+
+## The Core: MikroTik MLAG
+
+A redundant firewall pair is pointless if both boxes plug into the same switch. This is where the CRS326 pair comes in, running RouterOS **MLAG** (Multi-chassis Link Aggregation): two physical switches present themselves as a single LACP partner.
+
+The two switches are joined by an **ISL (inter-switch link)** bonded from the two QSFP+ ports. Every dual-homed device gets a bond with a matching `mlag-id` on both switches:
+
+```bash
+/interface bonding
+add name=sfpplus23-bond mode=802.3ad mlag-id=23 slaves=sfp-sfpplus23
+
+/interface bridge port
+add bridge=bridge interface=sfpplus23-bond pvid=999
+
+/interface bridge vlan
+set [find vlan-ids=100] tagged=ISL-PEER,sfpplus23-bond,...
+```
+
+Firewall A bonds ix0+ix1 across switch 1 and switch 2 on MLAG bond 23; firewall B does the same on bond 24. The NAS and the out-of-band management switch are dual-homed the same way. From each device's perspective it is just a boring LACP trunk — the MLAG magic is invisible.
+
+Two rules I learned to respect:
+
+- **VLAN membership must be identical on both MLAG peers** for every bond, or you get asymmetric forwarding that is miserable to debug.
+- LACP takes ~30 seconds to converge. Do not start debugging "DEFAULTED" ports before you have finished your coffee.
+
+### RSTP: Elect Your Root on Purpose
+
+MLAG removes loops between bonded devices, but the broader topology still runs spanning tree, and here I found a classic footgun: **every switch was still at the default bridge priority (0x8000)**, which means the root bridge election is decided by lowest MAC address. In my case, a random edge device had quietly won the root election over the core.
+
+The fix is boring and essential — plan the root explicitly:
+
+```bash
+# core switch 1 (intended root)
+/interface bridge set bridge protocol-mode=rstp priority=0x1000
+# core switch 2 (backup root)
+/interface bridge set bridge protocol-mode=rstp priority=0x2000
+```
+
+Also worth knowing: RouterOS RSTP is single-instance, not per-VLAN — a blocked port is blocked for *all* VLANs. Design accordingly.
+
+## The VLAN Plan
+
+V3 was also the moment to renumber. The V2 scheme (VLANs 1–90) grew organically; the new scheme maps VLAN IDs to the second octet of the subnet, so an address instantly tells you where it lives:
+
+| VLAN ID | Name | Subnet | Purpose |
+|---------|------|--------|---------|
+| 100 | Core | 10.0.0.0/24 | Firewalls, switches, core infrastructure |
+| 101 | Server | 10.1.0.0/16 | Servers, VMs, storage |
+| 102 | LAN | 10.2.0.0/24 | Trusted clients |
+| 103 | Guest | 10.3.0.0/24 | Isolated guest network (captive portal) |
+| 104 | IoT | 10.4.0.0/24 | Smart home devices |
+| 106 | DMZ | 10.6.0.0/24 | Public-facing services behind a reverse proxy |
+| 107 | Office | 10.7.0.0/24 | Home-office segment |
+| 109 | MGMT | 10.9.0.0/24 | Switch/AP/BMC management |
+| 999 | Parking | — | Native VLAN on all trunks; a blackhole, nothing lives here |
+| 4094 | MLAG control | — | Reserved for the MLAG control plane |
+
+Untagged traffic on any trunk lands in VLAN 999 and goes nowhere — a cheap insurance policy against misconfigured or factory-reset devices leaking into a production segment. The zero-trust segmentation model from V2 (trusted zones, isolated untrusted zones with "DNS to firewall + internet only" rules) carried over almost one-to-one; it just lives in `pf` rules and aliases now instead of UniFi's object model.
+
+## The Road Not Taken: Routing on the Core
+
+One design I seriously considered — because it is how "real" enterprise networks are often built — was a **collapsed core**: let the MikroTik pair route the trusted VLANs in hardware and keep only a transit VLAN to the firewall.
+
+I rejected it, and the reason is worth documenting because the datasheets are misleading. The CRS326's Marvell switch chip absolutely *can* do L3 hardware offload — 36K IPv4 routes, hardware NAT, the works. But MikroTik's feature matrix lists both **MLAG and VRRP as incompatible with L3 hardware offloading**. That is a double knockout: MLAG is the foundation of the entire core, and a *redundant* L3 core would additionally need VRRP. A redundant MikroTik L3 core with hardware offload simply does not exist.
+
+The fallback — software routing on the CRS326's 650 MHz single-core MIPS CPU — would be a massive downgrade from two x86 firewalls. And when I actually measured the firewall trunk, inter-VLAN traffic peaked in the low tens of megabits: there was no hairpin bottleneck to solve in the first place. Server-to-server traffic inside a VLAN is switched at layer 2 and never touches the firewall anyway.
+
+**Decision: the core stays pure layer 2, OPNsense routes everything.** Sometimes the best architecture review ends with "the problem you're solving doesn't exist."
+
+## The Migration
+
+Because firewall B's core port was still occupied by the UDM, the cutover had to be phased:
+
+1. **Prepare everything offline.** Both OPNsense boxes fully built — VLANs, CARP VIPs, Kea DHCP in hot-standby, Unbound with all internal DNS overrides, WireGuard, firewall rules — while the UDM was still the live gateway.
+2. **Move the controller.** UniFi switches and APs still need a controller, so the Network application moved into a small VM (UniFi OS Server), and all devices were re-adopted to it. The UDM stayed the gateway throughout — zero risk.
+3. **Cut over.** Unplug the UDM, connect firewall A to its MLAG bond, move the WAN links. Firewall A became CARP master and owned every `.1` gateway. Single-homed, but live.
+4. **Complete HA.** With the UDM's port free, create the second MLAG bond and bring firewall B in as the synced standby.
+
+The golden rule of the whole plan: **never let the UDM and OPNsense claim the gateway IPs at the same time.**
+
+## Lessons and Tradeoffs
+
+Leaving the walled garden has a price, and I hit most of it in the first week:
+
+- **UniFi does a lot silently.** NAT reflection was on by default; OPNsense had it off, and internal access to public hostnames broke until I noticed. WireGuard "just worked" on UniFi because it auto-created WAN rules; on OPNsense the tunnels stayed down until I wrote the inbound rules myself. Convenience is real — you only see how much of it you had when it's gone.
+- **HA multiplies small mistakes.** Kea's DHCP HA terminated itself because the standby node's clock had drifted while it was isolated. Lesson: HA nodes need NTP *before* they need anything else.
+- **Two boxes, one truth.** Anything outside the config sync (interfaces, VIPs, per-node quirks) must be maintained twice, deliberately. Discipline replaces the single pane of glass.
+- **The convenience gap is closable.** Group-based rules became `pf` aliases, the guest portal became OPNsense's captive portal, dynamic VLANs still work via the switches. It took evenings, not weeks.
+
+Was it worth it? Since the cutover I have rebooted a firewall mid-evening for updates — streams kept playing, nobody looked up from the couch. That is the feature no single appliance can ship.
+
+## What's Next?
+
+The edge is redundant; the rest of the lab wants to catch up. Next on the list: a three-node Proxmox/Ceph cluster so the VMs get the same treatment the gateway got, IPv6 done properly across the HA pair, and monitoring that pages me *before* the family does.
+
+V2 taught me segmentation. V3 taught me redundancy. Whatever V4 becomes, it will be built on a network that no longer has a single box I'm afraid of.

@@ -100,7 +100,9 @@ export default function About() {
             <p>
               Today, my focus lies in open source software and network engineering. I enjoy designing resilient network
               infrastructures, contributing to open source projects, and pushing the boundaries of what&apos;s possible
-              in my HomeLab — driven by the belief that the only real limit is the horizon of our imagination.
+              in my HomeLab — driven by the belief that the only real limit is the horizon of our imagination. Since
+              mid-2026 I also run my own side business, building and operating web applications and SaaS products and
+              offering IT consulting.
             </p>
           </div>
         </div>

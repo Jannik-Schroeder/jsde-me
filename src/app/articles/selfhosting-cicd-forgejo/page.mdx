@@ -1,0 +1,136 @@
+import { ArticleLayout } from '@/components/ArticleLayout'
+
+export const article = {
+    author: 'Jannik Schröder',
+    date: '2026-08-09',
+    title: 'Self-Hosting CI/CD: Forgejo + Woodpecker + Harbor + Komodo',
+    description:
+        "How I moved ~70 repositories off GitHub and built a fully self-hosted software supply chain: Forgejo for git, Woodpecker for CI, Harbor as the registry, and Komodo for deployments - including the auto-deploy loop and the pitfalls that cost me the most time.",
+}
+
+export const metadata = {
+    title: article.title,
+    description: article.description,
+}
+
+export default (props) => <ArticleLayout article={article} {...props} />
+
+## Introduction
+
+For years, my entire development workflow lived on GitHub: code, CI, container images, everything. It worked, but it always bothered me that the core of my homelab - the thing I actually control end-to-end - depended on an external platform for its most critical piece: the software supply chain.
+
+So I decided to bring it home. Over the course of a few very intense days, I migrated roughly 70 repositories off GitHub and built a fully self-hosted chain: **Forgejo** for git hosting, **Woodpecker** for CI, **Harbor** as the container registry, and **Komodo** for deployments. The result is a loop where a single `git push` builds an image, pushes it to my own registry, and rolls out the new version to production - without a single external service involved.
+
+This article covers why I picked each tool, how the auto-deploy flow works, and the lessons that cost me the most time.
+
+## The Stack
+
+| Component | Role | Why this one |
+|-----------|------|--------------|
+| **Forgejo** | Git hosting, issues, releases, webhooks | Community-driven Gitea fork, lightweight, excellent GitHub migration API |
+| **Woodpecker CI** | Container-native CI pipelines | Dead simple, every step is a container, pairs perfectly with Forgejo via OAuth |
+| **Harbor** | Container registry | Proper RBAC, robot accounts, proxy-cache for Docker Hub/GHCR, built-in Trivy scanning |
+| **Komodo** | Deployment / stack management | Manages all my Docker Compose stacks, supports git-backed stacks and deploy webhooks |
+
+A few deliberate architecture decisions:
+
+- **Everything is private and internal.** The whole stack is only reachable from LAN and VPN. There is no WAN port-forward anywhere - not even for the registry.
+- **The CI runner lives in its own isolated VLAN.** The build agent can reach the git server and the registry, and nothing else. It cannot touch databases, storage, or the deployment layer. Untrusted code runs in CI, so the blast radius should be as small as possible.
+- **GitHub didn't disappear entirely.** Truly open-source projects with outside contributors stay on GitHub; solo public projects live in Forgejo with an automatic push-mirror back to GitHub. Private repos were migrated and archived on the GitHub side.
+
+## Migrating ~70 Repositories
+
+Forgejo's migration API made this far less painful than expected. It talks to GitHub directly and pulls over issues, pull requests, labels, milestones, releases, and wikis - not just the git data. I wrote a small idempotent script that walked through the repo list, migrated each one, and skipped anything that already existed.
+
+The important part was **verification before trusting anything**: for every repo I compared the default branch SHA, the full branch list, and all tag names between GitHub and Forgejo. Only repos that passed got a push-mirror configured. That paranoia paid off, because Forgejo push-mirrors use `--mirror` semantics - they will happily *delete* refs on the target that don't exist on the source. Mirroring an incompletely migrated repo back to GitHub would have destroyed history there.
+
+Forks stayed on GitHub on purpose. Migrating a fork severs its relationship to the upstream repo, which defeats the point of it being a fork.
+
+## The Auto-Deploy Loop
+
+This is the heart of the setup. For a typical app, the flow looks like this:
+
+1. I push to the app repo in **Forgejo**.
+2. **Woodpecker** picks up the webhook, reads the version from `package.json`, and builds the image with buildx.
+3. The image is pushed to **Harbor** under the project matching the repo's organization.
+4. The pipeline then clones a dedicated **infra repo** (containing the Docker Compose files of all stacks), bumps the image tag in the app's compose file, and pushes that change with a dedicated CI service account.
+5. That push fires a **Forgejo webhook** pointing at **Komodo's** deploy listener.
+6. Komodo pulls the updated compose file from git, pulls the new image from Harbor (using a pull-only robot account), and redeploys the stack.
+
+About thirty seconds after a push, the new version is live.
+
+One detail worth highlighting: the CI agent **cannot** call Komodo directly - the firewall between the build VLAN and the app network blocks it, by design. The deploy trigger therefore *has* to go through the git-based indirection: pipeline commits to the infra repo, infra repo webhook triggers Komodo. That felt like a workaround at first, but it turned out to be the better design anyway. Every deployment is now a commit. The infra repo is a complete, auditable history of what ran where and when, and a rollback is just reverting a tag bump and pushing.
+
+## A Typical Pipeline
+
+Here's what a `.woodpecker.yml` for a typical Node app looks like (hostnames genericized):
+
+```yaml
+steps:
+  tags:
+    image: alpine:3.20
+    commands:
+      - VERSION=$(sed -n 's/.*"version". *"\([^"]*\)".*/\1/p' package.json)
+      - echo -n "$VERSION,latest" > .tags
+
+  build:
+    image: woodpeckerci/plugin-docker-buildx:6.1.1
+    settings:
+      repo: registry.internal.example/myorg/my-app
+      registry: registry.internal.example
+      username:
+        from_secret: harbor_user
+      password:
+        from_secret: harbor_token
+
+  deploy-tag:
+    image: alpine/git:2.45.2
+    commands:
+      - VERSION=$(cut -d, -f1 .tags)
+      - git clone https://$FORGEJO_USER:$FORGEJO_TOKEN@git.internal.example/myorg/infra-stacks.git
+      - cd infra-stacks
+      - sed -i "s#myorg/my-app:[0-9][^\"]*#myorg/my-app:$VERSION#" apps/my-app/docker-compose.yml
+      - git commit -am "my-app - image tag $VERSION (pipeline $CI_PIPELINE_NUMBER)" && git push || echo "no change"
+    secrets: [forgejo_user, forgejo_token]
+    when:
+      branch: main
+```
+
+Two non-obvious server-side requirements for this to work: the buildx plugin needs to run privileged, and Woodpecker's allowlist for privileged plugins (`WOODPECKER_PLUGINS_PRIVILEGED`) is *empty by default* - and matches on the exact image tag. And don't be tempted to put `privileged: true` in the pipeline itself; that fails with an "insufficient trust level" error. The server-side allowlist is the right mechanism.
+
+## Hard-Won Lessons
+
+Building this taught me more about the failure modes of these tools than any documentation could. My top five:
+
+### 1. Forgejo silently drops webhooks to private addresses
+
+Forgejo's default `ALLOWED_HOST_LIST` for webhooks is `external` - it refuses to deliver webhooks to RFC1918 addresses, and it does so **without any visible error**. In a fully internal setup, every single webhook target is a private address. Until you set `[webhook] ALLOWED_HOST_LIST = private` in `app.ini`, neither your CI nor your deploy tool will ever hear about a push, and nothing in the UI tells you why.
+
+### 2. "Successfully authenticated" does not mean "did anything"
+
+Komodo's stacks have a `webhook_force_deploy` flag that defaults to off. With it off, an incoming webhook is authenticated, logged as successful... and then nothing happens. No deploy, no error, no log entry explaining the no-op. This was the single most time-consuming bug of the whole project, precisely because every component reported success. Lesson: when chaining systems via webhooks, verify the *end effect*, not the delivery status.
+
+### 3. Know your plugin's data types - `build_args` is a map, not a list
+
+I passed build args to the buildx plugin in list form (`- KEY=VALUE`), the way GitHub Actions and plain Docker accept them. The plugin silently mangled that into a broken `--build-arg` and the value never reached the build - so the Dockerfile's default (`http://localhost:3001` as the API URL) got compiled into a Next.js frontend and shipped to production. The site was broken in a way that only manifested in the browser. Since then, for any image with build-time-baked values, I inspect the image (`docker image inspect`, grep the built bundles) *before* rolling it out.
+
+### 4. Registry auth has sharp edges: `$` in robot account names
+
+Harbor robot accounts are named `robot$something` - and that `$` is a landmine. In a TOML config file, escaping it as `\$` doesn't produce a literal dollar sign; it makes the **entire file invalid**, and the consuming service may quietly fall back to default config instead of erroring out loudly. The same character will bite you in shell scripts and compose files if you're not careful with quoting. After every config change that includes a robot account, I now check the service's logs for parse errors before moving on.
+
+### 5. Relative bind mounts break when compose files move
+
+When I switched my stacks from "compose file on the host" to "compose file cloned from git", every `./data:/data` style mount silently re-resolved against the *new* clone directory. One service came up with a fresh, empty database - looking perfectly healthy while all real data sat untouched in the old path. Because my migration script backed up each old stack directory first, nothing was lost, but the lesson stuck: **application data never lives relative to the compose file.** Absolute paths for anything stateful, and `grep -rnE '^\s*-\s*\./'` before moving any stack.
+
+An honorable mention: git-over-SSH on a self-hosted forge usually runs on a non-standard port (mine maps to 2222, since 22 belongs to the host). Remote URLs then need the explicit `ssh://git@host:2222/owner/repo.git` form - the familiar `git@host:owner/repo.git` shorthand can't express a port, and half my tooling had assumptions about that baked in.
+
+## Was It Worth It?
+
+Absolutely. Beyond the independence angle, the setup is genuinely *better* than what I had:
+
+- **Deployments are commits.** The infra repo is a complete audit log, and rollbacks are `git revert` away.
+- **Harbor's proxy-cache** means my hosts pull Docker Hub and GHCR images through my own registry - faster, cached, and rate-limit-proof.
+- **Trivy scanning** on every push immediately exposed that three of my images were built on an EOL Node base image dragging in thousands of CVEs. A one-line base image change later, that was fixed - something I'd never have noticed on GitHub's free tier.
+- **The isolation model is real.** CI runs untrusted code in a VLAN that physically cannot reach anything valuable.
+
+Is a four-component supply chain overkill for one person's projects? Probably. But like everything in this homelab, the point is to learn how these systems fail - and as the lessons above show, they fail in wonderfully instructive ways.

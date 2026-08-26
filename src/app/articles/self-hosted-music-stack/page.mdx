@@ -1,0 +1,173 @@
+import { ArticleLayout } from '@/components/ArticleLayout'
+
+export const article = {
+    author: 'Jannik Schröder',
+    date: '2026-05-17',
+    title: 'Self-Hosted Music: Building My Own Streaming Stack',
+    description:
+        "Why I stopped renting my music library and built my own streaming stack instead - Plex and Plexamp as the player, a Soulseek-first acquisition pipeline with slskd, Lidarr-style automation, and everything running in Docker on my homelab.",
+}
+
+export const metadata = {
+    title: article.title,
+    description: article.description,
+}
+
+export default (props) => <ArticleLayout article={article} {...props} />
+
+## Introduction
+
+For years, my entire music life lived inside a streaming subscription. It was convenient, but it always bothered me on a fundamental level: I didn't own anything. Playlists I had curated for years could disappear because of licensing changes, albums would silently vanish from my library, and the recommendation algorithm slowly turned my listening habits into a monoculture.
+
+At some point I asked myself the same question I ask about every service I depend on: *can I self-host this?*
+
+The answer is yes - and honestly, the result is better than what I had before. This article documents the music stack running in my homelab: **Plex and Plexamp** as the streaming frontend, **Lidarr** for library management, and **slskd** (a headless Soulseek client) as the backbone of my acquisition strategy for building out my personal collection.
+
+## The Goal
+
+Before diving into tools, here's what I actually wanted:
+
+- **A real library**: Files I own and manage, in lossless FLAC where possible, organized in a clean `Artist/Album` structure
+- **Streaming-grade UX**: Gapless playback, offline sync on my phone, good discovery - no compromises compared to commercial services
+- **Automation**: When I add an artist or album to my wishlist, the stack should take care of the rest
+- **Independence**: No single subscription that, once cancelled, takes half my setup down with it
+
+That last point turned out to be more important than I initially thought - more on that below.
+
+## The Stack
+
+| Component | Role | Port |
+|-----------|------|------|
+| **Plex** | Media server, serves the music library | 32400 |
+| **Plexamp** | Dedicated music client (desktop + mobile) | - |
+| **Lidarr** | Library management, wishlist, metadata, renaming | 8686 |
+| **slskd** | Headless Soulseek client with a REST API | 5030 |
+| **Soularr** | Bridge between Lidarr's wanted list and slskd | - |
+| **Gluetun** | VPN egress container for privacy | - |
+
+### Plex + Plexamp: The Player
+
+I evaluated a few options for the frontend (Navidrome and Jellyfin among them), but **Plexamp** won me over. It's genuinely one of the best music apps I've ever used - gapless playback, loudness leveling, sonically-aware shuffle ("sonic adventure" between two tracks is a party trick that never gets old), and proper offline downloads on mobile. Since Plex was already running for movies and TV, the music library was just one more section.
+
+The important part: Plexamp doesn't care where the files came from. It just sees a well-tagged FLAC library and makes it shine.
+
+### Lidarr: The Librarian
+
+Lidarr is the brain of the library. It tracks which artists I follow, which albums exist, which ones I'm missing, and handles renaming and folder structure when new files arrive. Think of it as a wishlist manager with strong opinions about metadata.
+
+### slskd + Soularr: The Soulseek-First Pipeline
+
+This is the interesting part. **Soulseek** has been the home of music enthusiasts for over two decades - a community of collectors sharing their personal libraries, with an incredible depth in exactly the areas where commercial catalogs are weakest: live recordings, out-of-print releases, regional artists, and obscure editions.
+
+**slskd** is a modern, headless Soulseek client that runs beautifully in Docker and exposes a full REST API. **Soularr** closes the loop: it periodically reads Lidarr's "missing" list, searches the Soulseek network via slskd's API with a preference for FLAC, and hands completed folders back to Lidarr for import.
+
+Add an album in Lidarr, and a few hours later it's tagged, sorted, and playable in Plexamp. The automation is genuinely hands-off - most of the time.
+
+## Why Soulseek-First Won
+
+I didn't start here. My first iteration of the pipeline was built around my existing music streaming subscription, using its API as the automated source. That worked - until I decided to cancel the subscription, at which point the entire pipeline died with it. That was the wake-up call: I had rebuilt the same dependency I was trying to escape, just with extra steps.
+
+I evaluated the alternatives:
+
+1. **Keep a subscription just for the pipeline**: Defeats the whole purpose, and the tooling depends on session tokens that break constantly.
+2. **Web-based download frontends**: Every one I looked at was either unreliable or protected by captchas, which makes them useless for headless automation. Fine in a browser, dead on arrival for a cron pipeline.
+3. **Hi-res store subscriptions (Qobuz/Tidal)**: A legitimate future option for hi-res purchases, and my config keeps the door open - but again a subscription dependency.
+4. **Soulseek via slskd**: Community-driven, no account that can expire, no API that a vendor can shut off, and excellent FLAC coverage.
+
+Option 4 won decisively. The deciding factor wasn't just cost - it was **resilience**. The Soulseek network has outlived every music startup of the last twenty years. Building automation on top of it means my pipeline doesn't have a corporate kill switch.
+
+## Docker Compose Layout
+
+Everything runs as containers on a dedicated Debian VM in my Proxmox cluster. A simplified version of the compose file:
+
+```yaml
+services:
+  plex:
+    image: lscr.io/linuxserver/plex:latest
+    environment:
+      - PUID=4000
+      - PGID=4000
+    volumes:
+      - /opt/appdata/plex:/config
+      - /mnt/data/media:/data
+    ports:
+      - "32400:32400"
+    restart: unless-stopped
+
+  lidarr:
+    image: lscr.io/linuxserver/lidarr:latest
+    environment:
+      - PUID=4000
+      - PGID=4000
+    volumes:
+      - /opt/appdata/lidarr:/config
+      - /mnt/data/media:/data
+    ports:
+      - "8686:8686"
+    restart: unless-stopped
+
+  gluetun:
+    image: qmcgaw/gluetun:latest
+    cap_add:
+      - NET_ADMIN
+    environment:
+      - VPN_SERVICE_PROVIDER=custom
+      - VPN_TYPE=wireguard
+      - WIREGUARD_PRIVATE_KEY=${WIREGUARD_PRIVATE_KEY}
+    ports:
+      - "5030:5030" # slskd WebUI, exposed via the VPN container
+    restart: unless-stopped
+
+  slskd:
+    image: slskd/slskd:latest
+    network_mode: service:gluetun
+    volumes:
+      - /opt/appdata/slskd:/app
+      - /mnt/data/media/downloads:/downloads
+      - /mnt/data/media/library/music:/shares:ro
+    restart: unless-stopped
+
+  soularr:
+    image: mrusse08/soularr:latest
+    volumes:
+      - /opt/appdata/soularr:/data
+      - /mnt/data/media/downloads:/downloads
+    restart: unless-stopped
+```
+
+A few deliberate choices here:
+
+- **slskd shares its network namespace with Gluetun** (`network_mode: service:gluetun`), so all Soulseek traffic leaves through a WireGuard tunnel. Peer-to-peer means connecting directly to strangers - I prefer not to do that from my home IP.
+- **Secrets live in an `.env` file**, never in the compose file itself.
+- **slskd shares my library back to the network** (read-only mount) - Soulseek is a community, and leeching is bad manners.
+
+## Storage: Everything on the NAS
+
+The VM itself is small and stateless-ish - container configs live under `/opt/appdata`, but all media sits on my NAS, mounted via NFS at `/mnt/data/media`. The layout:
+
+```
+/mnt/data/media
+├── library
+│   └── music        # Artist/Album/Track.flac - the canonical library
+└── downloads        # slskd landing zone, Lidarr imports from here
+```
+
+This separation matters: downloads land in a scratch area, and only files that Lidarr successfully matches and renames make it into the library. Plex only ever sees the clean side. The NAS handles snapshots and backups, so a misbehaving container can never eat the collection.
+
+One NFS gotcha worth knowing: with root squash enabled, containers can't `chown` files during import. Run everything with a consistent PUID/PGID (I use 4000 across the whole stack) and the problem disappears.
+
+## Lessons Learned
+
+1. **Fuzzy matching is the real work.** Soulseek folders are named by humans, and Lidarr's default 80% match threshold rejects a surprising number of perfectly good albums. They end up stranded in the downloads folder. Lidarr's manual import API can force-import these in batches - I now run a periodic cleanup pass instead of clicking through the UI.
+2. **"Running" is not "working".** slskd occasionally gets stuck in a zombie `Disconnecting` state: the container is healthy, the WebUI responds, but every search fails. The only reliable signal is the `isLoggedIn` field on its server API endpoint. Health checks should test *function*, not just HTTP 200.
+3. **VPN health needs its own monitoring.** A WireGuard key can silently become invalid, leaving the tunnel container "connected" while nothing actually flows. Comparing against a second, known-good tunnel turned out to be the fastest way to tell "my key died" from "the provider is down."
+4. **Import failures accumulate silently.** Downloads that never import don't error loudly - they just pile up on disk. I once cleaned around 80 GB of orphaned files out of the downloads volume. Watch the *import* side of the pipeline, not just the download side.
+5. **Own the pipeline, not just the files.** The whole reason this stack exists is that my first version depended on a subscription. Every component I run now is open source and community-driven. That's the difference between a setup and an ecosystem.
+
+## Conclusion
+
+Was this more work than paying ten euros a month? Absolutely. But I now have a lossless library that nobody can take away, a player that's genuinely better than the commercial apps, and an automation pipeline that quietly fills the gaps while I sleep.
+
+The Soulseek-first decision is the part I'd highlight for anyone building something similar: pick sources that can't be revoked. Subscriptions end, APIs get shut down, tokens expire - communities persist.
+
+My music is finally mine again. And it sounds better than ever.

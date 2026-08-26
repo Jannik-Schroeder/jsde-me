@@ -1,0 +1,134 @@
+import { ArticleLayout } from '@/components/ArticleLayout'
+
+export const article = {
+    author: 'Jannik Schröder',
+    date: '2026-06-14',
+    title: 'Steam LAN Cache: lancache + Unbound on OPNsense',
+    description:
+        "Building a transparent Steam download cache with lancache monolithic, DNS overrides in Unbound on an OPNsense HA pair, NFS storage from TrueNAS, and automatic prefill of every game I own - including new purchases.",
+}
+
+export const metadata = {
+    title: article.title,
+    description: article.description,
+}
+
+export default (props) => <ArticleLayout article={article} {...props} />
+
+## Why Cache Steam Downloads at All?
+
+Modern games are huge. A single AAA title easily weighs in at 100+ GB, and updates regularly push tens of gigabytes. Now multiply that by several gaming PCs in the house, the occasional LAN party, and my habit of reinstalling games I deleted three months ago - and suddenly the same bytes are crossing my internet uplink over and over again.
+
+The fix is a **LAN cache**: a transparent proxy that sits between the Steam clients and Valve's CDN. The first download fills the cache at internet speed; every subsequent download of the same content is served from the local network at wire speed. Steam even supports this officially - the client checks whether `lancache.steamcontent.com` resolves locally and, if it does, routes its CDN traffic through that host automatically. No client-side configuration needed.
+
+One important mental model up front: lancache doesn't cache "games", it caches **depot chunks**. Steam splits every game into content-addressed chunks, and the cache stores exactly those. That means updates are covered automatically - a patched game just requests a few new chunks while everything unchanged is still a cache hit.
+
+## lancache-dns vs. Unbound Overrides
+
+The lancache project ships its own DNS container, `lancachenet/lancache-dns`, which rewrites the CDN hostnames for you. It works, but it means putting yet another DNS server into the resolution path - and my network already has a perfectly good resolver: **Unbound on OPNsense**.
+
+My firewall is an OPNsense **HA pair** (CARP), with clients pointing at the virtual IP `10.1.0.1`. Instead of introducing lancache-dns, I added a single host override in Unbound:
+
+```text
+Services → Unbound DNS → Overrides → Host Overrides
+
+Host:        lancache
+Domain:      steamcontent.com
+Type:        A
+IP address:  10.1.0.111
+```
+
+Two details matter here:
+
+1. **The override has to exist on both firewall nodes.** With CARP, either node can be the active one, and Unbound config is per-node. An override that only lives on one firewall works fine - until the next failover, at which point Steam silently bypasses the cache and pulls from the public CDN again. I keep everything as GUI-visible host overrides on both nodes (no hidden include files), so the config survives audits and my future self can actually see it.
+2. **AAAA must return NODATA, not a public address.** Unbound's transparent local zone handles this correctly: the A override answers with the cache IP, and the AAAA query gets an empty answer. If clients received a real IPv6 CDN address, they would happily use it and skip the cache.
+
+For me this approach wins clearly: one less container, one less DNS hop, and the override lives in the same HA-replicated firewall config as everything else. The lancache-dns container makes more sense if you want to cache many services (Epic, Blizzard, Riot, Windows Update, ...) and let the project's maintained domain lists do the work. I only cache Steam, so a single override is all it takes.
+
+## The Cache Host
+
+The cache itself is a small Debian VM on Proxmox (4 cores, 8 GB RAM) running the `lancachenet/monolithic` container:
+
+```yaml
+services:
+  lancache:
+    image: lancachenet/monolithic:latest
+    container_name: lancache
+    restart: unless-stopped
+    ports:
+      - '80:80'
+      - '443:443'
+    environment:
+      CACHE_DISK_SIZE: 4000g
+      CACHE_INDEX_SIZE: 1000m
+      UPSTREAM_DNS: 1.1.1.1 9.9.9.9
+    volumes:
+      - /data/cache:/data/cache
+      - /data/logs:/data/logs
+```
+
+Two non-obvious lessons baked into that file:
+
+- **`UPSTREAM_DNS` must bypass Unbound.** The container needs to resolve the *real* Steam CDN addresses to fill the cache. If it asked my Unbound, it would get its own IP back for `lancache.steamcontent.com` - a perfect DNS loop.
+- **`CACHE_INDEX_SIZE` scales with `CACHE_DISK_SIZE`.** nginx keeps the cache key index in RAM, and the rule of thumb is roughly **250 MB of index per 1 TB of cache**. When I grew the cache from 2 TB to 4 TB I had to bump the index from 500 MB to 1000 MB along with it - on an 8 GB VM, forgetting this is the difference between a working cache and an OOM-killed one.
+
+## Storage: NFS from TrueNAS
+
+The VM itself is tiny; the actual cache lives on my TrueNAS box. I created a dedicated dataset with `recordsize=1M` - a good match for lancache's large slice files - and an 8 TB `refquota` so a growing cache can never eat the pool. The dataset is NFS-exported to exactly one client, the cache VM, and mounted via fstab:
+
+```text
+10.1.0.254:/mnt/data02/lancache  /data  nfs4  defaults,_netdev  0  0
+```
+
+This split has a pleasant side effect: the cache VM is completely disposable. Recreating the container with `docker compose up -d` - or even rebuilding the whole VM - leaves the cached chunks untouched. I verified this the boring way: recreate the container, request a known chunk, watch the very first response come back as a `HIT`.
+
+## Prefill: Warm Cache Before Anyone Asks
+
+A cache only helps once it's warm, and the worst time to warm it is when four people are waiting to play. Enter **SteamPrefill**, a CLI tool that speaks the Steam depot protocol and downloads your library *through the cache* without installing anything.
+
+After a one-time interactive login, a systemd timer runs it every night at 04:00:
+
+```ini
+[Unit]
+Description=Prefill Steam library into lancache
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/steamprefill
+ExecStart=/opt/steamprefill/SteamPrefill prefill --all
+```
+
+The `--all` flag is the key detail: instead of maintaining a hand-picked app list with `select-apps`, prefill simply walks **everything the account owns**. Buy a game in the evening, and by the next morning its chunks are already sitting in the cache - new purchases prefill themselves, zero maintenance.
+
+Two operational footguns worth writing down:
+
+- **Never start a prefill through an interactive SSH pipe.** If the SSH session dies, SteamPrefill blocks writing to the dead pipe and hangs silently at some percentage. Always start it detached (`systemctl start --no-block steamprefill.service`) and watch progress via `journalctl`.
+- **The prefill host's DNS must go through the firewall.** systemd-resolved cheerfully learned an upstream resolver from DHCP and asked it directly - straight past my override, filling the internet instead of the cache. Pinning resolved to `10.1.0.1` with `Domains=~.` fixed that.
+
+I also added a traffic shaper on OPNsense limiting cache-*fill* traffic to 150 Mbit/s, so a nightly prefill of a freshly bought 120 GB game never saturates the uplink. Cache *hits* stay on the LAN and are unlimited.
+
+## Does It Actually Help?
+
+Checking is trivial - the access log tells the truth:
+
+```bash
+docker exec lancache tail -f /data/logs/access.log
+# [steam] 10.1.0.x ... "GET /depot/<id>/chunk/<sha> HTTP/1.1" 200 HIT
+```
+
+Some numbers from my setup:
+
+| Metric | Value |
+|--------|-------|
+| Prefillable library | 68 apps, ~1.3 TiB |
+| Cache dataset in use | ~1.5 TB |
+| Cold download (internet) | limited by uplink, shaped to 150 Mbit/s |
+| Warm download (cache hit) | line rate - the client's disk becomes the bottleneck |
+
+The practical difference: a warm 100 GB install lands in minutes instead of hours, a second PC downloading the same update costs the uplink nothing, and Steam's "download in progress" bar at a LAN party stops being a social event.
+
+## Conclusion
+
+For a Steam-only setup, I'd skip lancache-dns and use your resolver's native overrides every time - it's one DNS record, fully visible in the firewall GUI, replicated across the HA pair. Combine that with NFS-backed storage so the cache outlives the VM, size the nginx index alongside the disk, and let a nightly `prefill --all` keep the cache warm without ever thinking about it again.
+
+Is 4 TB of cache for one household overkill? Probably. But the first time a friend's laptop pulls a full game at 10 gigabit while the internet uplink stays idle, it feels entirely reasonable.

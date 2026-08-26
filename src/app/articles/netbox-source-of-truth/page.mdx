@@ -1,0 +1,132 @@
+import { ArticleLayout } from '@/components/ArticleLayout'
+
+export const article = {
+    author: 'Jannik Schröder',
+    date: '2026-04-12',
+    title: 'NetBox as the Homelab Source of Truth',
+    description:
+        "Why I replaced wiki pages with NetBox as the single source of truth for my homelab - the Cloud vs self-hosting decision, my modeling conventions for devices, VLANs and IP space, and how structured documentation pays off when everything changes at once.",
+}
+
+export const metadata = {
+    title: article.title,
+    description: article.description,
+}
+
+export default (props) => <ArticleLayout article={article} {...props} />
+
+## Introduction
+
+Every homelab goes through the same documentation lifecycle: first there is nothing, then there is a wiki page, then there is an *outdated* wiki page. After my [network rebuild](/articles/home-network-v2) I had more VLANs, more devices, and more IP space than I could reliably keep in my head - and my Markdown notes were already drifting away from reality.
+
+The fix was to stop writing documentation as prose and start treating it as **data**. NetBox is exactly that: a structured model of your infrastructure - sites, racks, devices, interfaces, prefixes, VLANs, IP addresses - with an API on top. This article covers why I made the switch, why I ended up on NetBox Cloud instead of self-hosting, and the modeling conventions that keep the whole thing useful instead of becoming yet another stale database.
+
+## Documentation-as-Data vs. Wiki Pages
+
+A wiki page describing your network has three fundamental problems:
+
+1. **It cannot be validated.** Nothing stops you from documenting the same IP twice, or a VLAN that no longer exists. NetBox will simply refuse a duplicate IP inside a prefix.
+2. **It cannot be queried.** "Which devices have an interface in VLAN 40?" is a five-second API call against NetBox and a ten-minute grep session against a wiki.
+3. **It rots silently.** Free-form text has no relationships, so deleting a device leaves orphaned mentions everywhere. In a relational model, deleting a device takes its interfaces, IP assignments, and cable paths with it.
+
+The mental shift is subtle but important: NetBox documents **intended state**, not what happens to be running right now. That is what makes it a source of truth: when reality and NetBox disagree, one of them is wrong, and you have a concrete discrepancy to resolve instead of a vague feeling that the docs are outdated.
+
+## NetBox Cloud vs. Self-Hosting
+
+I originally self-hosted NetBox as a Docker Compose stack on one of my container hosts. It worked - until it quietly didn't. During a larger infrastructure restructuring, the reverse proxy route for it was never carried over, the DNS record ended up pointing somewhere useless, and firewall changes cut off the host it lived on. My source of truth was unreachable for weeks, and I only noticed when I actually needed it.
+
+That failure mode taught me something about documentation systems specifically: **your source of truth must not depend on the infrastructure it documents.** When half the lab is torn apart mid-migration is exactly when you need your documentation the most - and exactly when a self-hosted instance is most likely to be down.
+
+So I moved to **NetBox Cloud**, the hosted offering from NetBox Labs. The trade-offs, honestly assessed:
+
+- **Pro:** It is outside my failure domain. I can rebuild the entire lab from scratch with NetBox as my checklist.
+- **Pro:** Upgrades happen without me. Self-hosted NetBox upgrades are not hard, but they are one more chore that competes with actual projects.
+- **Con:** My infrastructure inventory lives with a third party. For a homelab I consider that acceptable - it contains topology, not credentials.
+- **Con:** No shell access, no custom plugins beyond what the platform supports.
+
+For a company with an ops team, self-hosting is perfectly reasonable. For a one-person lab where the documentation system must survive the exact outages it exists to help with, hosted won decisively.
+
+## Modeling Conventions
+
+A source of truth is only as good as its consistency. These are the conventions I settled on - the specifics matter less than having *any* rule you apply without exceptions.
+
+### Naming Scheme
+
+Every physical device gets a name that encodes site, category, function, and an index. Network gear gets short role prefixes instead:
+
+| Pattern | Type | Example |
+|---------|------|---------|
+| `<site>sp<function><nn>` | Physical servers | `labspnas01`, `labspgpuai01` |
+| `sw-<location>-<nn>` | Switches | `sw-rack1-01` |
+| `fw-<location>-<nn>` | Firewalls | `fw-edge-01` |
+| `ppk-<rack>-<nn>` | Patch panels | `ppk-rack1-01` |
+| `<function><nn>` | VMs | `docker01`, `dev01` |
+
+The function part is deliberately descriptive (`nas`, `gpuai`, `gamex`) rather than clever. When a machine's purpose changes, I rename it - the name should tell the truth *today*, not preserve history. Racks follow a similar pattern encoding building, floor, and position, so a rack name alone tells you where to walk.
+
+For custom-built machines, I name the **device type after the chassis** and set the manufacturer to the chassis maker (a SilverStone 4U case becomes device type "SST-RM44", manufacturer SilverStone). The components that actually vary - CPU, GPU - go in as **inventory items** on the device. This keeps the device-type library small while still answering "which box has the RTX card in it?" instantly.
+
+### Prefixes, VLANs, and IPs
+
+Every VLAN from my network design exists in NetBox with its matching prefix, and the two are linked. The rules:
+
+- **Every prefix belongs to a VLAN** (or is explicitly marked as a container). No floating prefixes.
+- **Every IP assignment is attached to an interface**, never created as a bare address. A bare IP tells you nothing; an IP on `eth0` of `labspnas01` tells you everything.
+- **Gateways and other conventions are encoded by habit**, e.g. `.1` is always the gateway. NetBox won't enforce that, but consistency makes anomalies visible.
+
+### What to Model - and What to Skip
+
+This is where most NetBox projects die: trying to model everything, burning out, and abandoning the tool. My line in the sand:
+
+**Model:** racks and rack positions, physical devices, network gear, patch panels and cable runs, VMs with their cluster, all VLANs/prefixes/IP assignments, and inventory items for expensive or migration-relevant components.
+
+**Skip:** software configuration (that lives in Git and Ansible), ephemeral containers, DHCP clients in the IoT and guest VLANs, and per-cable serial numbers. If it changes daily or is fully disposable, it doesn't belong in a system that documents intended state.
+
+## Keeping It in Sync with Reality
+
+The failure mode of every documentation system is drift, and structure alone doesn't prevent it. What works for me:
+
+1. **NetBox first, hardware second.** New device? It gets created in NetBox - name reserved, IP allocated, rack unit assigned - *before* I rack it. The documentation is never catching up because it was there first.
+2. **API changes over UI clicking.** Anything repetitive goes through `pynetbox`, which makes updates cheap enough that I actually do them:
+
+```python
+import os
+import pynetbox
+
+nb = pynetbox.api(
+    "https://netbox.example.com",
+    token=os.environ["NETBOX_TOKEN"],
+)
+
+# A repurposed machine gets renamed, not left with a stale name
+device = nb.dcim.devices.get(name="labspgamex02")
+device.name = "labspgpuai01"
+device.save()
+
+# Next free IP in the server prefix, ready to assign to an interface
+prefix = nb.ipam.prefixes.get(prefix="10.20.0.0/24")
+ip = prefix.available_ips.create()
+```
+
+3. **Periodic reconciliation.** Every few weeks I diff reality against NetBox - ARP tables and the UniFi controller's client list against IPAM, `virsh`/Proxmox inventories against the VM list. Discrepancies are tickets to myself.
+
+That rename in the code block is a real example: a former gaming machine became a GPU/AI box, so it was renamed the same day, with device type and inventory items updated to match. Thirty seconds of API calls, and the source of truth stayed true.
+
+## The Payoff: Migrations
+
+The whole investment justified itself during my infrastructure restructuring. When you re-segment networks, re-address hosts, and physically move machines all at once, prose documentation collapses - it describes the old world and can't express a transition.
+
+With NetBox, migrations become queries:
+
+- **Blast radius analysis:** every device with an interface in a VLAN I was about to renumber, as one filtered list. Nothing forgotten, no surprise outage because some BMC interface was still on an old subnet.
+- **Conflict-free addressing:** new IPs came from `available_ips` on the target prefixes. Zero address conflicts during the entire migration - a first for me.
+- **Cable paths as a runbook:** knowing exactly which patch panel port feeds which switch port turned physically moving gear from archaeology into checklist execution.
+- **A definition of "done":** the migration was finished when reality matched NetBox again. Not "when it feels done" - when the model and the world agreed.
+
+## Conclusion
+
+NetBox won't make your homelab faster and it isn't glamorous. What it does is eliminate a whole category of self-inflicted pain: address conflicts, forgotten dependencies, archaeology sessions in front of the rack, and documentation you stopped trusting long ago.
+
+Three takeaways if you're considering it: treat documentation as data with a schema, not prose. Host your source of truth outside the infrastructure it describes. And be ruthless about scope - a small model you maintain beats a complete model you abandon.
+
+Is a datacenter-grade DCIM/IPAM system overkill for a homelab? Absolutely. But as with everything else in the lab, that's precisely the point.

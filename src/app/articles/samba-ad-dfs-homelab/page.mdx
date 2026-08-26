@@ -1,0 +1,132 @@
+import { ArticleLayout } from '@/components/ArticleLayout'
+
+export const article = {
+    author: 'Jannik Schröder',
+    date: '2026-03-08',
+    title: 'Samba AD DC + DFS: Real Directory Services in the Homelab',
+    description:
+        "Why I built a real Active Directory at home with Samba as the domain controller - central authentication for the whole family, a DFS namespace spanning two NAS boxes, and the lessons learned about DNS, VLANs, and msdfs along the way.",
+}
+
+export const metadata = {
+    title: article.title,
+    description: article.description,
+}
+
+export default (props) => <ArticleLayout article={article} {...props} />
+
+## Introduction
+
+For years, file access in my homelab looked like most homelabs do: two NAS boxes, a handful of local user accounts duplicated on each, and a growing pile of SMB mount points that everyone in the family had to know about. It worked - until it didn't. Passwords drifted apart, permissions were maintained twice, and explaining "the photos are on the *other* NAS" for the hundredth time got old.
+
+The fix was to stop treating identity as an afterthought and build it properly: a real **Active Directory** domain with **Samba** as the domain controller, and a **DFS namespace** that presents both NAS boxes behind a single name. One login, one stable path, and permissions maintained in exactly one place.
+
+## Why a Real AD at Home?
+
+This sounds like massive overkill for a family file server, so let me justify it:
+
+- **Central authentication**: One account per person, valid everywhere. Change your password once, it works on every share, on every box.
+- **One namespace across two NAS**: I run a fast SSD NAS for active data and a large HDD NAS for media and archives. Users shouldn't need to know or care which box holds what.
+- **Permissions in one place**: With AD groups, giving someone access to a share means adding them to a group. No per-NAS user juggling.
+- **It's a homelab**: Kerberos, LDAP, DNS delegation, idmap backends - these are exactly the technologies worth learning on hardware you own before you meet them in production.
+
+The alternative - keeping local users in sync across two TrueNAS systems forever - is the kind of quiet toil that never shows up on a diagram but eats your weekends.
+
+## Samba as the Domain Controller
+
+I didn't want a Windows Server license for this, and I didn't need one. Samba has been able to act as a full AD domain controller for a long time now, including DNS, Kerberos, and SYSVOL.
+
+The DC runs as a small, dedicated VM on Proxmox - a **real VM, not an unprivileged LXC container**. Domain controllers do enough low-level things (Kerberos, its internal DNS server, file ACL handling on SYSVOL) that a container's restricted capabilities cause more pain than the saved resources are worth. The VM itself is tiny: 2 vCPUs, 4 GB RAM, 25 GB disk, running Debian.
+
+Provisioning is a single command:
+
+```bash
+samba-tool domain provision \
+  --use-rfc2307 \
+  --realm=AD.EXAMPLE.LAB \
+  --domain=EXAMPLE \
+  --server-role=dc \
+  --dns-backend=SAMBA_INTERNAL \
+  --option="dns forwarder = 1.1.1.1"
+```
+
+Two decisions in that command matter more than they look:
+
+### The Domain Name
+
+I used a **delegated subdomain of a public domain I own** - shown here as `ad.example.lab`. Do *not* reuse the apex of your public domain internally: you'll end up with split-brain DNS, where internal and external answers for the same name disagree, and you'll be debugging that forever. A dedicated subdomain like `ad.` is internal-only, can never collide with your public records, and you don't need to buy anything new for it. And please don't use `.local` - that's mDNS territory.
+
+### RFC2307: Keep Your Existing UIDs
+
+The `--use-rfc2307` flag enables POSIX attributes (`uidNumber`/`gidNumber`) in the directory. This was the key to a painless migration: I assigned every AD user the **same numeric UID their old local NAS account had**. When the NAS boxes later joined the domain, all existing file ownership just kept working - no recursive `chown` across well over a hundred terabytes of data. If you're migrating an existing setup, plan your UID/GID schema *before* you join anything.
+
+## DNS Without Touching DHCP
+
+AD lives and dies with DNS, but I didn't want the DC anywhere near DHCP - my UniFi gateway already does that well, including all the static reservations.
+
+The integration is deliberately minimal: **UniFi keeps doing DHCP, and only the DNS server field in each DHCP scope points at the DC**. The DC serves DNS for the AD zone and forwards everything else upstream. Clients automatically find the domain, and if the DC is ever down for maintenance, DHCP itself is unaffected. Resist the urge to consolidate everything onto the DC - boring separation of concerns wins here.
+
+## VLAN Placement
+
+The DC does not belong in the core/infrastructure VLAN with the switches and the gateway. It's a server, and it lives in the **server VLAN** together with the two NAS boxes:
+
+| Host | Role | Example IP |
+|------|------|------------|
+| `dc01.ad.example.lab` | Samba AD DC, DNS, DFS root | 10.1.0.10 |
+| `nas01.ad.example.lab` | SSD NAS (TrueNAS) | 10.1.0.160 |
+| `nas02.ad.example.lab` | HDD NAS (TrueNAS) | 10.1.254.1 |
+
+Putting the DC and both NAS in the same VLAN means domain traffic between them never hairpins through the firewall. Family client devices sit in their own client VLAN (e.g. `10.2.0.0/24`) and cross a firewall boundary to reach the servers, so the rule set for "clients → server VLAN" needs exactly these services open:
+
+- **53** (DNS)
+- **88** and **464** (Kerberos auth and password changes)
+- **445** (SMB)
+- **123** (NTP - Kerberos is unforgiving about clock skew)
+
+That short list is one of the underrated benefits of doing this properly: the required flows are documented, minimal, and enforced.
+
+Joining the TrueNAS boxes afterwards was mostly a matter of pointing their DNS at the DC, ensuring time sync, and - critically - configuring the idmap backend to **read the RFC2307 attributes from AD** instead of allocating its own ID range. Get that wrong and TrueNAS silently invents new UIDs, and suddenly nobody owns their own files anymore.
+
+## DFS: One Name for Two NAS
+
+With identity solved, the second half of the project was the namespace. The goal: family members mount **one** path and see the folders they're allowed to see - regardless of which NAS physically stores them.
+
+Samba supports this via **msdfs**. The DC hosts a small DFS root share that contains no data at all, only referral links:
+
+```ini
+[global]
+    host msdfs = yes
+
+[files]
+    path = /srv/dfs/files
+    msdfs root = yes
+    read only = no
+```
+
+Inside that root, symlinks with a special `msdfs:` target tell the client where the real share lives:
+
+```bash
+ln -s 'msdfs:nas01.ad.example.lab\family'  /srv/dfs/files/Family
+ln -s 'msdfs:nas01.ad.example.lab\users'   /srv/dfs/files/Home
+ln -s 'msdfs:nas02.ad.example.lab\media'   /srv/dfs/files/Media
+```
+
+A client connecting to `\\ad.example.lab\files\Media` gets a *referral* and then talks **directly** to the HDD NAS - the data never flows through the DC. The namespace host is pure signposting, so its load is effectively zero. I had originally planned a separate VM just for the namespace; in practice, hosting the msdfs root on the DC was the simpler and perfectly adequate choice.
+
+The important detail: **DFS holds no permissions**. Access control lives entirely in the ACLs on the NAS datasets, and those ACLs point at AD groups. Granting someone access to the media library means adding them to the `media` group in AD - one change, one place, done.
+
+## Lessons Learned
+
+1. **Order matters: identity first, then ACLs, then namespace.** Building the DFS layer before the accounts and permissions are solid just means redoing it.
+2. **Always use FQDNs in msdfs links.** My first links used short hostnames, and clients in the client VLAN - which don't share the AD search domain - failed with "unable to follow DFS referral". `msdfs:nas01.ad.example.lab\share`, always.
+3. **RFC2307 UID mapping saved me a monster chown.** Matching AD uidNumbers to the pre-existing local UIDs meant zero ownership migration on the SSD NAS. Where old UIDs collided between the two boxes, I had to renumber first - do that audit early.
+4. **Watch out for accidental IPv6.** The DC picked up a SLAAC address and registered an AAAA record; clients preferred IPv6, which wasn't routed between VLANs, and things half-broke in confusing ways. The DC is IPv4-only now, deliberately.
+5. **The iOS Files app cannot follow DFS referrals.** Not a config error - it simply doesn't support DFS namespaces. iPhones either connect to the NAS shares directly or use a third-party file app; computers get the full namespace.
+6. **After changing ownership on a domain-joined NAS, flush the winbind cache** (`net cache flush`), or access checks keep serving stale results and you'll chase ghosts.
+7. **A DC should do DC things.** DNS yes, DHCP no, and no side quests. Small, boring, snapshot-friendly.
+
+## Conclusion
+
+Is a full Active Directory overkill for a household? By raw requirements, sure. But the result speaks for itself: everyone logs in with one account, mounts one path, and sees exactly the folders they're allowed to see - while two very different NAS boxes do the actual work behind the curtain. Permissions changed from "edit users on two systems and hope" to "add a person to an AD group".
+
+And along the way I got hands-on with Kerberos, DNS delegation, idmap backends, and DFS referrals on infrastructure I fully control. That trade - a couple of weekends for a system that mostly disappears into the background - is exactly what the homelab is for.

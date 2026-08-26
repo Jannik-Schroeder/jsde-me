@@ -1,0 +1,134 @@
+import { ArticleLayout } from '@/components/ArticleLayout'
+
+export const article = {
+    author: 'Jannik Schröder',
+    date: '2026-02-08',
+    title: 'Paperless-ngx: A DMS You Can Actually Trust',
+    description:
+        "How I run Paperless-ngx in my homelab as a document management system for both private and business paperwork - covering my tagging convention, consume-folder automation, the pitfalls I ran into, and why a backup only counts once you've actually restored it.",
+}
+
+export const metadata = {
+    title: article.title,
+    description: article.description,
+}
+
+export default (props) => <ArticleLayout article={article} {...props} />
+
+## Introduction
+
+For years, my paperwork strategy was a shoebox with extra steps: scan things occasionally, dump the PDFs into a folder, and hope I'd never actually need to find anything. That works right up until you need a specific document - an insurance policy, a payslip, a tax notice - and you're grepping through filenames like `31-03-2025_07:31.pdf`.
+
+The fix was **Paperless-ngx**, a self-hosted document management system that OCRs everything you feed it, makes it full-text searchable, and lets you organize documents with correspondents, document types, and tags. Since I've started doing self-employed work on the side, the system now holds business documents too - including paperwork I'm legally required to retain. That raised the stakes considerably, and it's why the second half of this article is about backups and restore testing.
+
+## The Setup: Docker on a Proxmox VM
+
+Paperless-ngx runs as a Docker Compose stack on a dedicated VM on my Proxmox host, reachable only from my internal network (something like `10.10.0.60` - RFC1918, nothing exposed to the internet). Login is handled through my identity provider via OpenID Connect, so it's one SSO login like every other service in the lab.
+
+The stack itself is the standard trio: the Paperless web server, PostgreSQL, and Redis as the task broker. A trimmed-down version of my compose file looks like this:
+
+```yaml
+services:
+  broker:
+    image: redis:7
+    restart: unless-stopped
+
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    volumes:
+      - ./data/pgdata:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: paperless
+      POSTGRES_USER: paperless
+      POSTGRES_PASSWORD: '<from-env-file>'
+
+  webserver:
+    image: ghcr.io/paperless-ngx/paperless-ngx:latest
+    restart: unless-stopped
+    depends_on:
+      - db
+      - broker
+    ports:
+      - '8000:8000'
+    volumes:
+      - ./data/media:/usr/src/paperless/media
+      - ./data/export:/usr/src/paperless/export
+      - ./consume:/usr/src/paperless/consume
+    env_file: docker-compose.env
+```
+
+Nothing exotic - and that's the point. A DMS holding documents with legal retention requirements should be boring infrastructure.
+
+## One User, Metadata Does the Separation
+
+An early design decision: private and business documents live in **one instance under one user**, and the separation happens through metadata, not through separate accounts. A second user only gets created when a second human actually needs access - say, an accountant who should see business documents only. Paperless-ngx's permission system can handle that later via a group with read access filtered to the business tag.
+
+The conventions that make this work:
+
+| Concept | Rule |
+|---------|------|
+| **Tags** | Topics and projects only (insurance, vehicle, server, ...) - plus one dedicated `business` tag on everything business-related, and a per-year tax tag |
+| **Correspondents** | Always the *sender* of the document (tax office, chamber of commerce, insurer, ...) - I initially abused tags for this and had to migrate |
+| **Document types** | What the document *is*: invoice, official notice, contract, payslip, certificate |
+| **Titles** | ISO-date-first: `YYYY-MM-DD Subject` for one-off documents, `YYYY-MM Payslip` for monthly series |
+| **Storage path** | Business documents get their own path template, so they're physically separated on disk |
+
+Two of these deserve a closer look.
+
+**ISO-first titles** mean the document list sorts chronologically for free. A scanner timestamp is not a title - `2025-06-14 Liability insurance policy` tells you everything, `14-06-2025_09:12` tells you nothing.
+
+**Separate storage paths for business documents** (something like `business/{{ created_year }}/{{ correspondent }}/{{ title }}`) mean that if I ever need to hand over business records - for a tax audit, for example - the export is a single folder on disk rather than a database query. One detail: don't put the full date into the path template when your titles already start with it, or every filename carries the date twice.
+
+## Consume-Folder Automation
+
+The killer feature for day-to-day use is the consume directory with subfolder tagging:
+
+```ini
+PAPERLESS_CONSUMER_RECURSIVE=true
+PAPERLESS_CONSUMER_SUBDIRS_AS_TAGS=true
+```
+
+With these two settings, any subfolder inside `consume/` becomes a tag on the documents dropped into it. My scanner deposits business paperwork into `consume/business/`, and every document arriving there automatically gets the `business` tag - which in turn triggers the business storage path. Combined with regex-based auto-assignment rules on correspondents (government agencies conveniently use very recognizable letterheads and reference phrases), most business mail files itself: I scan it, and it lands tagged, attributed, and in the right folder without me touching the web UI.
+
+## Pitfalls Worth Knowing About
+
+Two issues cost me real time, and both are generic enough that you might hit them too.
+
+### Your VM's CPU type matters for the ML features
+
+Paperless-ngx ships a machine-learning classifier that learns to predict tags and correspondents from your corrections. Modern Python numeric libraries like NumPy are built expecting a baseline CPU feature set (x86-64-v2: SSE4.2, POPCNT, and friends). If your hypervisor presents a lowest-common-denominator virtual CPU - Proxmox's default `kvm64` type, for example - those instructions simply aren't advertised to the guest, and the classifier dies with cryptic import errors that look nothing like a CPU problem.
+
+The fix on a single-node Proxmox host is to set the VM's CPU type to `host` (a full stop/start, not a reboot, so the new CPU model is actually applied). On a cluster with mixed hardware, pick a common baseline like `x86-64-v2-AES` instead. Either way: if the document classifier silently stops working after an upgrade, check what CPU your VM thinks it has before debugging Python.
+
+### Date detection will pick the wrong date on payslips
+
+Paperless guesses each document's `created` date from the OCR text - and it tends to grab the *first* plausible date it finds. On payslips, the dates printed near the top are typically your employment start date and your date of birth, not the accounting month. The result: a whole series of monthly payslips all "created" on the same day, and one document cheerfully dated to my birthday.
+
+The lesson is to treat auto-detected dates on structured documents with suspicion, spot-check series documents after import, and rely on the ISO-dated titles as the source of truth for chronology. For large cleanups, the actual accounting period is usually printed in a machine-readable field somewhere on the document, so it can be extracted from the OCR text in bulk - but verify against the scan date, because OCR occasionally misreads a digit in the year.
+
+## A Backup Only Counts After a Restore Test
+
+Here's the part I actually want you to take away.
+
+Backing up Paperless-ngx is easy: dump the database, copy the media directory.
+
+```bash
+docker exec paperless-db pg_dump -U paperless paperless \
+  | gzip > /backups/paperless-db-$(date +%Y%m%d-%H%M).sql.gz
+```
+
+But an untested backup is not a backup - it's a hope. The moment this system started holding documents with legal retention requirements, "the cron job ran without errors" stopped being good enough. So I did a full restore rehearsal:
+
+1. Created a throwaway database (`restoretest`) on the same PostgreSQL instance - **never** restore over the live database for a test
+2. Replayed the latest dump into it, watching for any errors (there were zero)
+3. Compared row counts per table against the live database - they matched exactly
+4. Dropped the throwaway database afterwards
+
+Only after that did I consider the backup real. It's a fifteen-minute exercise, and it converts "I think I have backups" into "I have restored from my backups." That's the difference between a DMS you run and a DMS you can actually trust - and it's now a hard rule for me: no system goes productive without a tested restore, and every future backup check follows the same throwaway-database procedure.
+
+## Conclusion
+
+Paperless-ngx has turned my paperwork from a liability into something I barely think about. The conventions - one `business` tag, correspondents as senders, ISO-first titles, separate storage paths - took an afternoon to define and make the system largely self-organizing thanks to the consume-folder automation.
+
+But the honest summary is this: the software is the easy part. The value of a DMS is that documents are *there* when you need them, possibly years from now, possibly in front of an auditor. That guarantee doesn't come from Docker Compose - it comes from a restore you have actually performed. If you run Paperless-ngx (or any system holding documents that matter): schedule a restore rehearsal this week. Everything before that is just hoping.
