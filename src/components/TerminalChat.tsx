@@ -1,7 +1,17 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from 'react'
+
+import { type ArticleMeta } from '@/lib/articles'
+import { me, projectsUrl } from '@/lib/me'
 
 /** English on purpose: the whole interface is English, the agent replies in the
  *  language it is asked in. */
@@ -19,19 +29,140 @@ const UNREACHABLE =
   'The chat is not reachable right now. Everything else on this page still works.'
 const DROPPED = 'Connection dropped.'
 
-interface Turn {
-  id: number
-  role: 'user' | 'assistant'
-  content: string
+type Command = 'help' | 'whoami' | 'ls' | 'contact' | 'exit'
+
+type Turn =
+  | { id: number; role: 'user'; content: string }
+  | { id: number; role: 'assistant'; content: string }
+  | { id: number; role: 'system'; command: Command }
+
+/** Built-in commands, handled here and never sent to the model. Matching is on
+ *  the exact normalised line — nothing clever, so anything unlisted is a
+ *  question for AI-Jannik. */
+const COMMANDS: Record<string, Command | 'clear'> = {
+  clear: 'clear',
+  cls: 'clear',
+  help: 'help',
+  '?': 'help',
+  whoami: 'whoami',
+  ls: 'ls',
+  'ls -l': 'ls',
+  'ls articles': 'ls',
+  'ls -l articles': 'ls',
+  articles: 'ls',
+  contact: 'contact',
+  reach: 'contact',
+  exit: 'exit',
+  quit: 'exit',
 }
 
-/** `[label](/articles/slug)` or a bare `/articles/slug`. Built per call so the
- *  stateful `lastIndex` of a global regex is never shared between renders. */
-const ARTICLE_LINK = String.raw`\[([^\]\n]+)\]\((\/articles\/[a-z0-9-]+)\)|(\/articles\/[a-z0-9-]+)`
+const HELP: [string, string][] = [
+  ['clear', 'wipe the window, start over'],
+  ['help', 'this list, one screen'],
+  ['whoami', 'the short version of me'],
+  ['ls', 'every published article, newest first'],
+  ['contact', 'email and the usual profiles'],
+  ['exit', 'not what you are hoping for'],
+]
+
+function lookup(line: string): Command | 'clear' | undefined {
+  return COMMANDS[line.trim().toLowerCase().replace(/\s+/g, ' ')]
+}
 
 /**
- * Assistant text with `/articles/<slug>` turned into real links. Unknown slugs
- * stay plain text — a link to a 404 is worse than no link.
+ * Every target an assistant answer is allowed to turn into a link: Jannik's own
+ * addresses and his own articles, nothing else. A URL a prompt injection talked
+ * the model into printing stays plain text.
+ */
+const TARGETS = new Map<string, string>()
+
+function allow(text: string, href: string) {
+  if (text !== '') TARGETS.set(text, href)
+}
+
+allow(me.email, `mailto:${me.email}`)
+for (const link of [...me.links, { label: 'Projects', href: projectsUrl }]) {
+  allow(link.href, link.href)
+  if (link.href.startsWith('http')) {
+    allow(link.href.replace(/^https?:\/\//, '').replace(/\/$/, ''), link.href)
+  }
+}
+
+function escapeRe(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+/** `[label](target)` or a bare target. Longest literal first so the full URL
+ *  wins over its bare host form. */
+const LINK_SOURCE = (() => {
+  const literals = [...TARGETS.keys()]
+    .sort((a, z) => z.length - a.length)
+    .map(escapeRe)
+    .join('|')
+  const target = `\\/articles\\/[a-z0-9-]+${literals === '' ? '' : `|${literals}`}`
+  return `\\[([^\\]\\n]+)\\]\\((${target})\\)|(${target})`
+})()
+
+function resolve(
+  raw: string,
+  titles: Record<string, string>,
+): { href: string; label: string } | null {
+  if (raw.startsWith('/articles/')) {
+    const title = titles[raw.slice('/articles/'.length)]
+    return title === undefined ? null : { href: raw, label: title }
+  }
+  const href = TARGETS.get(raw)
+  return href === undefined ? null : { href, label: raw }
+}
+
+/** Marks a link that leaves the site. */
+function External() {
+  return (
+    <span aria-hidden="true" className="text-fg-faint">
+      {' '}
+      ↗
+    </span>
+  )
+}
+
+function AgentLink({
+  href,
+  children,
+}: {
+  href: string
+  children: React.ReactNode
+}) {
+  if (href.startsWith('http')) {
+    return (
+      <a
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="link text-fg"
+      >
+        {children}
+        <External />
+      </a>
+    )
+  }
+  if (href.startsWith('mailto:')) {
+    return (
+      <a href={href} className="link text-fg">
+        {children}
+      </a>
+    )
+  }
+  return (
+    <Link href={href} className="link text-fg">
+      {children}
+    </Link>
+  )
+}
+
+/**
+ * Assistant text with the allow-listed targets turned into real links. Anything
+ * unknown — including an unknown article slug — stays plain text: a link to a
+ * 404, or to somewhere a stranger named, is worse than no link.
  */
 function AgentText({
   text,
@@ -41,7 +172,7 @@ function AgentText({
   titles: Record<string, string>
 }) {
   const nodes: React.ReactNode[] = []
-  const pattern = new RegExp(ARTICLE_LINK, 'g')
+  const pattern = new RegExp(LINK_SOURCE, 'g')
   let last = 0
 
   for (
@@ -49,22 +180,103 @@ function AgentText({
     match !== null;
     match = pattern.exec(text)
   ) {
-    const href = match[2] ?? match[3] ?? ''
-    const slug = href.slice('/articles/'.length)
-    const known = titles[slug]
-    if (known === undefined) continue
+    const raw = match[2] ?? match[3] ?? ''
+    const target = resolve(raw, titles)
+    if (target === null) continue
 
     nodes.push(text.slice(last, match.index))
     nodes.push(
-      <Link key={`${match.index}-${slug}`} href={href} className="link text-fg">
-        {match[1] ?? known}
-      </Link>,
+      <AgentLink key={`${match.index}-${raw}`} href={target.href}>
+        {match[1] ?? target.label}
+      </AgentLink>,
     )
     last = match.index + match[0].length
   }
   nodes.push(text.slice(last))
 
   return <>{nodes}</>
+}
+
+/** What a built-in command prints. Dim, like any other system output. */
+function CommandOutput({
+  command,
+  articles,
+}: {
+  command: Command
+  articles: ArticleMeta[]
+}) {
+  if (command === 'help') {
+    return (
+      <div className="space-y-1">
+        {HELP.map(([name, hint]) => (
+          <p key={name}>
+            <span className="text-fg inline-block w-20">{name}</span>
+            <span>{hint}</span>
+          </p>
+        ))}
+        <p className="text-fg-faint pt-1">
+          anything else is a question for AI-Jannik.
+        </p>
+      </div>
+    )
+  }
+
+  if (command === 'whoami') {
+    return <p className="max-w-[76ch]">{me.short}</p>
+  }
+
+  if (command === 'ls') {
+    return (
+      <ul className="space-y-1">
+        {articles.map((article) => (
+          <li key={article.slug} className="flex gap-4">
+            <time
+              dateTime={article.date}
+              className="text-fg-faint hidden flex-none tabular-nums sm:block"
+            >
+              {article.date}
+            </time>
+            <Link
+              href={`/articles/${article.slug}`}
+              className="link-draw hover:text-fg motion-safe:transition-colors"
+            >
+              {article.title}
+            </Link>
+          </li>
+        ))}
+      </ul>
+    )
+  }
+
+  if (command === 'contact') {
+    const external = me.links.filter((link) => link.href.startsWith('http'))
+    return (
+      <div className="space-y-1">
+        <p className="text-fg">{me.name}</p>
+        <p>
+          <a href={`mailto:${me.email}`} className="link text-fg">
+            {me.email}
+          </a>
+        </p>
+        {[...external, { label: 'phanes.net', href: projectsUrl }].map(
+          (link) => (
+            <p key={link.href}>
+              <a
+                href={link.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="link-draw hover:text-fg motion-safe:transition-colors"
+              >
+                {link.href.replace(/^https?:\/\//, '').replace(/\/$/, '')}
+              </a>
+            </p>
+          ),
+        )}
+      </div>
+    )
+  }
+
+  return <p>there is no exit. try &lsquo;help&rsquo;.</p>
 }
 
 /** A blinking block cursor. Only ever accent-coloured, never animated for
@@ -92,10 +304,10 @@ export function Cursor({
  * rendered, so its links never leave the DOM.
  */
 export function TerminalChat({
-  titles,
+  articles,
   children,
 }: {
-  titles: Record<string, string>
+  articles: ArticleMeta[]
   children: React.ReactNode
 }) {
   const [draft, setDraft] = useState('')
@@ -104,6 +316,15 @@ export function TerminalChat({
   const [streaming, setStreaming] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [caret, setCaret] = useState({ pos: 0, scroll: 0 })
+  // `clear` wipes the boot text too, so it needs its own flag.
+  const [cleared, setCleared] = useState(false)
+  const [recall, setRecall] = useState<string[]>([])
+  const [recallAt, setRecallAt] = useState<number | null>(null)
+
+  const titles = useMemo(
+    () => Object.fromEntries(articles.map((a) => [a.slug, a.title])),
+    [articles],
+  )
 
   const scrollBox = useRef<HTMLDivElement>(null)
   const input = useRef<HTMLInputElement>(null)
@@ -168,15 +389,72 @@ export function TerminalChat({
     ])
   }
 
+  /** Put the caret back at the end after the value changed under it. */
+  function refocus(value: string) {
+    const el = input.current
+    if (el === null) return
+    el.focus()
+    requestAnimationFrame(() => {
+      el.setSelectionRange(value.length, value.length)
+      setCaret({ pos: value.length, scroll: el.scrollLeft })
+    })
+  }
+
+  /** ↑/↓ walk the lines already sent, like any shell. */
+  function onHistoryKey(event: ReactKeyboardEvent<HTMLInputElement>) {
+    if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return
+    if (recall.length === 0) return
+    event.preventDefault()
+
+    let next: number | null
+    if (event.key === 'ArrowUp') {
+      next = recallAt === null ? recall.length - 1 : Math.max(0, recallAt - 1)
+    } else {
+      next = recallAt === null ? null : recallAt + 1
+    }
+    if (next !== null && next >= recall.length) next = null
+
+    const value = next === null ? '' : (recall[next] ?? '')
+    setRecallAt(next)
+    setDraft(value)
+    refocus(value)
+  }
+
   async function send(text: string) {
     const question = text.trim()
     if (question === '' || streaming) return
 
-    const history: Turn[] = [
+    setRecall((old) => [...old, question])
+    setRecallAt(null)
+
+    // Built-in commands are answered here; the model never sees them.
+    const command = lookup(question)
+    if (command !== undefined) {
+      setDraft('')
+      setCaret({ pos: 0, scroll: 0 })
+      setError(null)
+      setPending('')
+      stick.current = true
+
+      if (command === 'clear') {
+        setTurns([])
+        setCleared(true)
+      } else {
+        setTurns((old) => [
+          ...old,
+          { id: nextId.current++, role: 'user', content: question },
+          { id: nextId.current++, role: 'system', command },
+        ])
+      }
+      refocus('')
+      return
+    }
+
+    const thread: Turn[] = [
       ...turns,
       { id: nextId.current++, role: 'user', content: question },
     ]
-    setTurns(history)
+    setTurns(thread)
     setDraft('')
     setCaret({ pos: 0, scroll: 0 })
     setError(null)
@@ -188,7 +466,11 @@ export function TerminalChat({
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        messages: history.map(({ role, content }) => ({ role, content })),
+        messages: thread.flatMap((turn) =>
+          turn.role === 'system'
+            ? []
+            : [{ role: turn.role, content: turn.content }],
+        ),
       }),
     }).catch(() => null)
 
@@ -265,7 +547,7 @@ export function TerminalChat({
     void send(draft)
   }
 
-  const empty = turns.length === 0 && !streaming
+  const empty = turns.length === 0 && !streaming && !cleared
 
   return (
     <>
@@ -274,27 +556,44 @@ export function TerminalChat({
         onScroll={onScroll}
         className="terminal-scroll bg-bg min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4 font-mono text-sm leading-relaxed"
       >
-        {children}
+        {!cleared && children}
 
         {turns.length > 0 && (
-          <div role="log" aria-live="polite" className="mt-5 space-y-4">
-            {turns.map((turn) =>
-              turn.role === 'user' ? (
-                <p key={turn.id} className="break-words whitespace-pre-wrap">
-                  <span aria-hidden="true" className="text-accent select-none">
-                    ${' '}
-                  </span>
-                  <span className="text-fg">{turn.content}</span>
-                </p>
-              ) : (
+          <div
+            role="log"
+            aria-live="polite"
+            className={`space-y-4 ${cleared ? '' : 'mt-5'}`}
+          >
+            {turns.map((turn) => {
+              if (turn.role === 'user') {
+                return (
+                  <p key={turn.id} className="break-words whitespace-pre-wrap">
+                    <span
+                      aria-hidden="true"
+                      className="text-accent select-none"
+                    >
+                      ${' '}
+                    </span>
+                    <span className="text-fg">{turn.content}</span>
+                  </p>
+                )
+              }
+              if (turn.role === 'system') {
+                return (
+                  <div key={turn.id} className="text-fg-dim">
+                    <CommandOutput command={turn.command} articles={articles} />
+                  </div>
+                )
+              }
+              return (
                 <p
                   key={turn.id}
                   className="text-fg-dim break-words whitespace-pre-wrap"
                 >
                   <AgentText text={turn.content} titles={titles} />
                 </p>
-              ),
-            )}
+              )
+            })}
           </div>
         )}
 
@@ -363,6 +662,7 @@ export function TerminalChat({
                 setDraft(event.target.value)
                 syncCaret()
               }}
+              onKeyDown={onHistoryKey}
               onKeyUp={syncCaret}
               onClick={syncCaret}
               onSelect={syncCaret}

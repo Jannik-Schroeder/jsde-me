@@ -80,6 +80,10 @@ Der serverseitig gerenderte Boot-Text (`$ whoami` + Vorstellungstext, `$ ls arti
 
 Unter dem Terminal steht ein kurzer Hinweis, dass hier ein Sprachmodell antwortet und irren kann.
 
+**Eingebaute Befehle (Client, ohne Modell):** `clear`/`cls` leert das Transcript, `help`/`?` listet die Befehle, `whoami` zeigt den Vorstellungstext, `ls`/`ls articles`/`articles` listet alle veröffentlichten Artikel als Links, `contact`/`reach` zeigt E-Mail als `mailto:` und die Profil-Links, `exit`/`quit` antwortet trocken. Alles andere geht als Frage an das Modell. Diese Befehle kosten keine Tokens.
+
+**Links in Antworten:** Nur drei Dinge werden anklickbar — `/articles/<slug>`-Pfade, die E-Mail-Adresse aus `me.email` als `mailto:`, und die exakten URLs aus `me.links`. Jede andere URL im Modelltext bleibt reiner Text, damit ein per Prompt eingeschleuster Link nie klickbar wird. Der System-Prompt weist das Modell an, bei Kontaktfragen genau diese Adresse und URLs unverändert zu nennen.
+
 ### Schnittstelle `POST /api/chat`
 
 Anfrage:

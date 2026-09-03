@@ -10,10 +10,6 @@ import { type ArticleMeta } from '@/lib/articles'
  * JavaScript runs, and the client chat continues below them.
  */
 export function Terminal({ articles }: { articles: ArticleMeta[] }) {
-  // Every slug, so the agent can link to any article; the boot text lists the
-  // newest handful.
-  const titles = Object.fromEntries(articles.map((a) => [a.slug, a.title]))
-
   return (
     <div className="flex min-h-0 flex-1 flex-col md:flex-none">
       <section
@@ -22,7 +18,7 @@ export function Terminal({ articles }: { articles: ArticleMeta[] }) {
         style={{ animationDelay: '70ms' }}
       >
         <TerminalTitleBar />
-        <TerminalChat titles={titles}>
+        <TerminalChat articles={articles}>
           <TerminalBoot articles={articles} />
         </TerminalChat>
       </section>
