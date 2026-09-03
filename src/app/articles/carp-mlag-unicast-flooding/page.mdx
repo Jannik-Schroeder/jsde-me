@@ -1,0 +1,134 @@
+import { ArticleLayout } from '@/components/ArticleLayout'
+
+export const article = {
+    author: 'Jannik Schröder',
+    date: '2026-09-06',
+    title: 'The 188 GB Log Day: Debugging CARP + MLAG Unicast Flooding',
+    description:
+        "My firewall's disk filled itself with 188 GB of firewall logs in a single day - and the GUI died with it. What followed was a deep dive through ARP tables, switch FDBs, and LACP hashing, ending at a subtle interaction between CARP virtual MACs and MLAG that turned my HA firewall pair into two firewalls routing the same packets in parallel.",
+}
+
+export const metadata = {
+    title: article.title,
+    description: article.description,
+}
+
+export default (props) => <ArticleLayout article={article} {...props} />
+
+## The Symptom
+
+It started, as these things do, with a dashboard that wouldn't load.
+
+The primary node of my OPNsense HA pair was unreachable via GUI. SSH still worked, and the first `df -h` told me everything and nothing at the same time:
+
+```
+Filesystem    Size    Used   Avail Capacity  Mounted on
+zroot/ROOT    223G    241G    -18G   109%    /
+```
+
+Yes, **109 % full**. Negative free space, courtesy of ZFS reservations being eaten alive. The web server logs were full of `write() to temp-file failed: No space left on device` - the GUI wasn't broken, it simply had nowhere left to write.
+
+The disk hog was quickly found:
+
+```
+-rw-------  1 root  wheel   188G  /var/log/filter/filter_20260815.log
+```
+
+**188 GB of firewall filter logs. In one day.** Normal volume on this box is 0.5 to 0.8 GB per day. Something was generating log lines at roughly 9.6 MB/s - about 830 GB/day if the disk had held out. At that rate, a healthy disk fills in about five hours.
+
+Truncating the day's log (`: > filter_20260815.log` - never `rm` a file a daemon still has open) brought the box back to 17 % usage and revived the GUI. Symptom handled. But *why* was my default-deny rule matching millions of packets per minute?
+
+## Reading the Flood
+
+Sampling the log showed that 99.9 % of it was a single conversation: an NFS client VM talking to a NAS in the same VLAN, port 2049 plus a handful of RPC ports. Both endpoints in `10.1.0.0/24`. Same subnet.
+
+That's the first thing that should make you sit up: **intra-VLAN traffic should never reach the firewall at all.** Two hosts on the same L2 segment talk directly through the switch. The firewall is only the gateway for traffic *leaving* the subnet.
+
+And a second oddity: the logged packets were almost all **out-of-state ACKs** - mid-connection TCP segments with no matching state table entry. The pass rules only create state on `flags S/SA`, so a naked ACK with no state falls through everything and lands in the default deny, which logs. The NFS mount itself was perfectly healthy the whole time. Whatever was happening, the firewall was seeing *copies* of traffic it had no business seeing.
+
+## The Suspect List
+
+Time to rule things out methodically, one suspect at a time:
+
+| Suspect | Verdict |
+|---------|---------|
+| Broken NFS mount retrying forever | **Cleared.** Mount healthy, terabytes transferred, directory listings instant. |
+| Stale/wrong ARP entries | **Cleared.** ARP tables correct on client, NAS, and both firewalls. |
+| Accidental port mirroring on the switch | **Cleared.** No mirror targets, no mirror rules configured. |
+| Interface/MAC flapping | **Cleared.** FDB entries stable across sampling windows, no flapping. |
+| FDB table overflow forcing flooding | **Cleared.** ~320 entries in a table that holds thousands. |
+| L2 loop / STP events | **Cleared.** No topology changes or loop detections in over a week. |
+
+Every classic explanation was dead. So I went one layer down and captured on the firewall's VLAN interface with `-e` to see the Ethernet headers:
+
+```
+# tcpdump -i lagg0_vlan101 -n -e
+aa:aa:aa:00:01:08 > aa:aa:aa:00:05:0f, IPv4,
+    10.1.0.108.807 > 10.1.0.254.2049: Flags [.], ack ...
+```
+
+That one line cracked the case. The **destination MAC wasn't the firewall's**. It was the NAS's MAC. The firewall was receiving frames addressed to a completely different host.
+
+There is exactly one mechanism that does that: **unknown-unicast flooding**. When a switch has no FDB entry for a destination MAC, it floods the frame out every port in the VLAN - including the ports facing my firewalls. This wasn't a routing problem. It was a switching problem.
+
+## The Actual Root Cause
+
+Here's the topology, simplified:
+
+```
+                 VLAN 101 (10.1.0.0/24)
+                 Gateway VIP: 10.1.0.1
+                 CARP VMAC:   00:00:5e:00:01:0b
+
+   fw-A (MASTER)                  fw-B (BACKUP)
+     lagg0 (LACP)                   lagg0 (LACP)
+      /       \                      /       \
+ +--------+  +--------+       +--------+  +--------+
+ |  sw-1  |==|  sw-2  |       |  sw-1  |  |  sw-2  |
+ +--------+  +--------+       (same switches, MLAG pair)
+      \\        //
+       NFS client, NAS, everything else
+```
+
+Two core switches in an MLAG pair. Each firewall connects with an LACP bond split across both switches. CARP provides the gateway VIP, which uses the well-known virtual MAC `00:00:5e:00:01:0b` (the last byte is the VHID).
+
+Now the chain of events, each link individually boring, together catastrophic:
+
+**1. Switches learn MACs from source addresses only.** The only frames that ever carry the CARP virtual MAC as a *source* are the CARP advertisements the master sends every second. Everything else the firewall transmits uses the physical MAC of the bond.
+
+**2. LACP hashing is deterministic.** The advertisement is the same packet every time - same MACs, same IPs, same protocol - so the hash always picks the **same bond member**. In my case, the advertisements for VLAN 101 always left via the member facing switch 2. The FDB pattern was almost comical: switch 1 knew the VIP MACs of the even-numbered VLANs, switch 2 knew the odd ones. Each switch only learns the advertisements that physically arrive on it.
+
+**3. MLAG-synced FDB entries age out.** Switch 2 shares its learned entry with switch 1 over the MLAG peering, flagged as a peer-learned entry. But that synced copy is subject to the normal ageing timer (5 minutes) - and since switch 1 *never* sees the MAC as a source itself, nothing refreshes it. Eventually switch 1 has **no entry at all** for the gateway MAC in VLAN 101.
+
+**4. No FDB entry means flooding.** From then on, every frame addressed to the gateway that ingresses on switch 1 gets flooded to **every port in VLAN 101**. And return traffic from the NAS to the client got the same treatment whenever its destination lookup failed on the ageing edge. Confirmed from a client:
+
+```
+$ ping -c 3 10.1.0.254
+3 packets transmitted, 3 received, +6 duplicates, 0% packet loss
+```
+
+Duplicate ping replies are the smoking gun of unicast flooding - every flooded copy that reaches another L3 hop can come back again.
+
+**5. The standby firewall joins the party.** This is the part that turns an inefficiency into an incident. A LACP `lagg` interface runs its members in promiscuous mode, so the *backup* node happily accepted the flooded frames addressed to the CARP MAC - and since it runs the same rule set, **it routed and NATed them in parallel with the master**. Its state table showed a single UDP state with 18 GB transferred, and its WAN interface had pushed 267 GB. My "standby" node was live-forwarding flooded traffic the whole time.
+
+**6. Duplicate delivery breaks the state tables.** With two nodes forwarding independently and each seeing only a random subset of the flooded copies, both constantly received mid-stream segments without matching state. Out-of-state ACKs match no pass rule, hit the default deny, and get logged. At NFS throughput with `nconnect=4`, that's 9.6 MB/s of log lines. Disk full in five hours.
+
+One aged-out FDB entry, five layers of consequences.
+
+## The Fix (and the Fix Behind the Fix)
+
+**Immediate stopgap:** a block rule *without logging* for intra-VLAN traffic (`10.1.0.0/24` to `10.1.0.0/24`) on both nodes, sequenced behind all pass rules. Intra-subnet traffic arriving at the firewall is flooded garbage by definition - dropping it silently is correct. Log rate went from 9.6 MB/s to 6.6 KB/s, a factor of ~1450. Disk stable, GUI alive.
+
+**The real fix is at L2:** the switches must reliably know the CARP virtual MACs. That means making the MLAG pair treat peer-learned entries on the shared bond as authoritative instead of letting them age out, or otherwise ensuring both peers see the advertisements. Tempting shortcut to avoid: **static FDB entries are not a solution.** A static entry permanently points at one node and silently breaks CARP failover - the moment the backup takes over, the switch keeps forwarding gateway traffic to a dead master.
+
+And one more guard that was painfully missing: my log retention was time-based only (keep 31 days). There was **no size-based cap** - so a single anomalous day could, and did, fill the disk regardless of retention settings.
+
+## Lessons Learned
+
+1. **Your logging can DoS you.** A default-deny rule with logging is an amplifier: the failure mode of "firewall sees unexpected traffic" becomes "firewall runs out of disk and dies". Cap your logs by size, not just by age, and alert on log *rate*, not just disk usage.
+2. **HA pairs multiply failure modes.** A single firewall receiving flooded frames drops them - annoying but harmless. A CARP pair receiving them has a second node that *acts* on them. Redundancy mechanisms don't just add availability; they add new interaction surfaces with every layer below them.
+3. **CARP + LACP + MLAG is a three-body problem.** Each technology is fine alone. Together: source-based learning meets deterministic hashing meets ageing peer entries, and the gateway MAC quietly vanishes from half your fabric.
+4. **`tcpdump -e` earns its keep.** Everything above L2 looked healthy. One look at the destination MAC turned a week of "impossible" symptoms into a provable mechanism. When traffic shows up where it shouldn't, check *who the frame was addressed to* before theorizing about routing.
+5. **Duplicate ping replies are never fine.** `+6 duplicates` is a one-line diagnosis of unicast flooding. It's cheap to check and almost nobody does.
+
+The firewall was never broken. It did exactly what it was configured to do - both of them did, and that was precisely the problem.

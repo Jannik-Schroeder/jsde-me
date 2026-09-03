@@ -1,0 +1,169 @@
+import { ArticleLayout } from '@/components/ArticleLayout'
+
+export const article = {
+    author: 'Jannik Schröder',
+    date: '2026-09-20',
+    title: 'One Login Everywhere: Authentik SSO for the Homelab',
+    description:
+        "How I rolled out Authentik as a central identity provider for my homelab - OIDC for Proxmox, Paperless-ngx, LibreNMS and Komodo, forward-auth for everything else, and the integration gotchas I hit along the way.",
+}
+
+export const metadata = {
+    title: article.title,
+    description: article.description,
+}
+
+export default (props) => <ArticleLayout article={article} {...props} />
+
+## The Problem: Password Sprawl
+
+At some point, every homelab crosses an invisible line. One day you have three services with three passwords, and the next you're staring at a password manager with thirty entries that all start with the same prefix. Proxmox has its own users. Paperless-ngx has its own users. LibreNMS has its own users. Every new tool ships with its own login page, its own password policy, and its own idea of what a session is.
+
+The problems compound quickly:
+
+- **Onboarding a new service** means creating yet another account
+- **Rotating a password** means rotating it in a dozen places (so realistically, you don't)
+- **Half my tools** had no authentication at all and relied purely on being unreachable from the internet
+
+That last point bothered me the most. A service shouldn't be one firewall misconfiguration away from being wide open.
+
+The fix is the same one enterprises use: a central identity provider (IdP) with single sign-on. One account, one strong password, one MFA enrollment - and every application delegates authentication to it.
+
+## Why Authentik?
+
+There are several self-hostable IdPs worth considering: Keycloak, Authelia, Zitadel, and Authentik. I went with **Authentik** for a few reasons:
+
+- **Protocol coverage**: OIDC/OAuth2, SAML, LDAP, RADIUS, and proxy/forward-auth - all from one deployment. That matters in a homelab, where the app landscape is wildly heterogeneous.
+- **Outposts**: Authentik can deploy lightweight satellite components (LDAP outposts, proxy outposts) for apps that don't speak modern protocols.
+- **Reasonable operational weight**: Heavier than Authelia, much lighter to operate than Keycloak in my experience.
+- **Flows and policies**: Login, enrollment, and consent are modeled as configurable flows, which turned out to be genuinely useful rather than enterprise checkbox theater.
+
+Authentik runs as a small Docker Compose stack on a dedicated VM, published through my reverse proxy with a proper certificate. Internally, clients reach it via split-horizon DNS - the auth hostname resolves to the internal proxy address (something like `10.0.20.10`), so authentication traffic between VLANs never has to leave the network.
+
+## The Rollout
+
+I didn't migrate everything at once. Instead, I sorted my services into three buckets:
+
+| Bucket | Strategy | Examples |
+|--------|----------|----------|
+| Native OIDC support | Register an OAuth2 provider in Authentik, configure the app | Proxmox, Paperless-ngx, LibreNMS, Komodo |
+| No native support, behind a proxy | Traefik forward-auth middleware in front | Dashboards, media tools, small web utilities |
+| Not worth it | Leave as-is, deliberately | Mail server, apps with client protocols |
+
+To keep the OIDC provider setup consistent, I wrote a small template script that creates the provider and application objects through Authentik's shell ORM: same authorization flow, same signing key, same subject mode (`hashed_user_id`), same scopes (`openid email profile`) every time. After the third provider, clicking through the UI gets old.
+
+### Proxmox VE
+
+Proxmox has supported OpenID Connect realms for a while, and the setup is a single command:
+
+```bash
+pveum realm add authentik --type openid \
+  --issuer-url https://auth.lab.example.com/application/o/proxmox/ \
+  --client-id proxmox-4f8a2c \
+  --username-claim username \
+  --autocreate 1 \
+  --scopes "openid profile email"
+```
+
+**Gotcha #1: the redirect URI.** The Proxmox web UI initiates the OIDC flow from whatever origin your browser is using - including the `:8006` port. Authentik's exact-match redirect URI validation rejected the callback until I switched the redirect URI to a regular expression matching the GUI origin, e.g. `https://[^/]+:8006/?`.
+
+**Gotcha #2: autocreated users have no permissions.** `--autocreate 1` creates the user on first login, but with zero ACLs. You log in via SSO, see an empty datacenter, and briefly wonder if you broke everything. The fix is a one-time grant from an existing admin account:
+
+```bash
+pveum acl modify / --users jannik@authentik --roles Administrator
+```
+
+The lesson generalizes: **almost every app creates SSO users as unprivileged on first login.** The rollout choreography is always the same - log in once via OIDC, then promote that new user with your still-working local admin, then log in again (sessions cache the old permissions).
+
+### Paperless-ngx
+
+Paperless-ngx does OIDC through django-allauth. It's all environment variables:
+
+```ini
+PAPERLESS_APPS=allauth.socialaccount.providers.openid_connect
+PAPERLESS_SOCIALACCOUNT_PROVIDERS={"openid_connect":{"APPS":[{"provider_id":"authentik","name":"Authentik","client_id":"paperless-9d3e1b","settings":{"server_url":"https://auth.lab.example.com/application/o/paperless/.well-known/openid-configuration"}}]}}
+PAPERLESS_SOCIAL_AUTO_SIGNUP=true
+PAPERLESS_LOGOUT_REDIRECT_URL=https://auth.lab.example.com/
+```
+
+The gotcha here wasn't OIDC itself - it was that I combined the SSO work with a version upgrade, and Paperless required a **mandatory intermediate version** on the upgrade path: you have to step through the last release of the previous series before jumping to the new major. A database dump beforehand saved me a lot of anxiety, if not (this time) any actual data.
+
+After that, an "Authentik" button appears next to the normal login form, and the redirect dance just works.
+
+### LibreNMS
+
+LibreNMS was the most instructive integration, because its documentation nudges you toward a wrong mental model.
+
+LibreNMS has an `auth_mechanism` setting (mysql, LDAP, RADIUS, ...), and it separately supports OAuth via Laravel Socialite provider plugins. My instinct was: install the Authentik Socialite provider, set `auth_mechanism = socialite`, done. That instinct produces a **500 error** - the legacy auth layer has no such mechanism and refuses to boot the login page.
+
+**The key insight: Socialite in LibreNMS is additive, not a mechanism switch.** You leave `auth_mechanism` at `mysql`, and the login view independently renders one button per configured Socialite provider next to the password form. SSO and local login coexist - which also conveniently eliminates any lockout risk during the rollout.
+
+Two more traps worth knowing about, described generically:
+
+- **Config file ownership matters.** The `config.php` holding the Socialite settings must be owned by the application user, not root - otherwise LibreNMS silently ignores it. Pair every config change with a config cache clear.
+- **Trusted proxy configuration is exact.** Behind a reverse proxy, LibreNMS reads a very specifically named environment variable for trusted proxies. Guess the name wrong and the app generates `http://` asset URLs behind your `https://` proxy - mixed content, no CSS, and a login page that looks like 1996.
+
+And one bonus lesson: running `git` as root inside a repository owned by another user silently returns nothing on modern git (dubious ownership protection). I briefly diagnosed my LibreNMS install as "ancient, not even a git checkout" when it was current all along. Always `sudo -u <appuser> git ...`.
+
+### Komodo
+
+Komodo (my Docker deployment/management tool) was the easiest of the four - it has first-class OIDC support via environment variables:
+
+```ini
+KOMODO_OIDC_ENABLED=true
+KOMODO_OIDC_PROVIDER=https://auth.lab.example.com/application/o/komodo/
+KOMODO_OIDC_CLIENT_ID=komodo-7b2f9e
+KOMODO_ENABLE_NEW_USERS=true
+KOMODO_LOCAL_AUTH=true
+```
+
+Note the last line: I deliberately kept local authentication enabled as a **break-glass account**. If Authentik is down, I can still reach the tool that manages my containers - including the Authentik containers. Think hard about circular dependencies before you make your IdP the only way into the thing that runs your IdP.
+
+One quirk: because a local user with my username already existed, the OIDC-created user got a random suffix, and promoting it to admin meant a quick edit in the backing database. First-login-then-promote, same as everywhere else.
+
+## Forward-Auth for Everything Else
+
+A surprising number of homelab tools have **no authentication at all** - IT utility dashboards, speed test pages, status pages. Others technically have auth but no sane way to integrate an IdP. For all of these, the answer is **forward-auth at the reverse proxy**.
+
+The pattern with Traefik: every request to the protected app is first sent to an Authentik proxy outpost. If the user has a valid Authentik session, the request passes through (optionally with identity headers); if not, they're redirected to the login flow. The app itself never knows authentication happened.
+
+```yaml
+http:
+  middlewares:
+    authentik-forward:
+      forwardAuth:
+        address: http://192.168.30.5:9000/outpost.goauthentik.io/auth/traefik
+        trustForwardHeader: true
+        authResponseHeaders:
+          - X-authentik-username
+          - X-authentik-email
+
+  routers:
+    it-tools:
+      rule: Host(`tools.lab.example.com`)
+      middlewares:
+        - authentik-forward
+      service: it-tools
+```
+
+The limits are worth being honest about: it protects the **web UI only** (API clients and mobile apps won't survive a redirect to a login page), and some apps ignore the forwarded identity headers entirely, leaving you with a second login behind the gate. But for "this dashboard should not be open to everyone on the LAN," it's exactly the right tool.
+
+## What I Deliberately Left Out
+
+Restraint was the most important architectural decision of this project.
+
+- **The mail server.** It supports OIDC on paper, but OIDC only covers the *web* interface - IMAP and SMTP clients fundamentally can't do an OIDC browser flow. So I'd be adding a second auth path to the most availability-critical and most break-sensitive service I run, for the benefit of one rarely-used web login. The risk/benefit math is terrible. Mail auth stays local, untouched.
+- **Automation tools with paywalled SSO.** One workflow tool I run gates SSO behind its enterprise tier. Forward-auth in front is the pragmatic ceiling there; I'm not paying enterprise prices for a homelab login button.
+- **My own side projects.** They have their own auth stacks by design, and retrofitting OIDC would be a project each. Not this quarter.
+
+The general rule I landed on: **SSO everything where the integration is native and reversible; gate the rest at the proxy; and never let the IdP become a hard dependency of a service whose failure mode is data loss or lost email.**
+
+## Verdict
+
+After several weeks of running this setup: I'd do it again, and earlier.
+
+The day-to-day difference is bigger than I expected. Every internal tool is one click and an existing session away. New services get an OIDC provider stamped out from the template script in two minutes. Previously-open dashboards now sit behind real authentication with MFA, without any of them needing to know what MFA is.
+
+The honest cost accounting: the actual OIDC configuration was rarely the hard part. The time went into the periphery - redirect URI matching rules, config file ownership, trusted proxy variables, firewall rules and split-horizon DNS entries so every client VLAN can reach the IdP internally, and the little first-login-then-promote dance that every single app required. None of it was difficult; all of it was specific.
+
+Authentik itself has been boring in the best possible way - it sits there and issues tokens. And the break-glass local admins I kept on Proxmox and Komodo? Never needed so far. But knowing they exist is what made me comfortable pushing SSO this deep into the lab in the first place.

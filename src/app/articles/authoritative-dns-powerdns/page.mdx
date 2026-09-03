@@ -1,0 +1,173 @@
+import { ArticleLayout } from '@/components/ArticleLayout'
+
+export const article = {
+    author: 'Jannik Schröder',
+    date: '2026-10-18',
+    title: 'Running Authoritative DNS: PowerDNS + Galera + dnsdist',
+    description:
+        "What I learned running my own authoritative DNS service (mtxdns) - and how I consolidated the architecture from five servers down to three by putting PowerDNS and a locally replicated MariaDB Galera cluster directly on each nameserver, with dnsdist in front.",
+}
+
+export const metadata = {
+    title: article.title,
+    description: article.description,
+}
+
+export default (props) => <ArticleLayout article={article} {...props} />
+
+## Introduction
+
+For a while now I've been running my own authoritative DNS service, **mtxdns**. Not a resolver - an actual authoritative platform that answers for real zones on the public internet, with an API, ACME DNS-01 support, and dynamic LUA records for health-based routing.
+
+Running authoritative DNS yourself is one of those projects that looks simple on paper ("it's just port 53") and turns out to be a masterclass in distributed systems, caching semantics, and failure domains. This article is about the architecture - specifically, how I recently consolidated it from five servers down to three, and ended up with a setup that is both cheaper *and* more resilient than what I had before.
+
+## The Original Architecture: Five Servers
+
+The first iteration of the platform separated every concern onto its own machine:
+
+| Host | Role | Location |
+|------|------|----------|
+| ns1 | dnsdist only (public frontend) | Helsinki |
+| ns2 | dnsdist only (public frontend) | Nuremberg |
+| db01 | PowerDNS + MariaDB (Galera) | Nuremberg |
+| pdns-home | PowerDNS + MariaDB (Galera) | Homelab, via WireGuard |
+| monitoring | Prometheus, Alertmanager, Grafana | Nuremberg |
+
+The two public nameservers ran **only dnsdist**, load-balancing queries round-robin across two PowerDNS backends: a cloud server (db01) and a node in my homelab, reachable over a WireGuard tunnel. The two backends formed a two-node MariaDB **Galera** cluster, so every record written on one node was synchronously replicated to the other.
+
+On paper this looked clean. In practice, it had three problems.
+
+### Problem 1: Half the public traffic ran over my home DSL
+
+With `setServerPolicy(roundrobin)` and two healthy backends, every second public DNS query was answered by the homelab node - which meant it traveled over a WireGuard tunnel terminated on a residential DSL line. Health checks would evict a dead backend within ~15 seconds, but for a service that wants to be taken seriously, a home internet connection simply does not belong in the hot answer path.
+
+### Problem 2: A two-node Galera cluster needs quorum tricks
+
+Two-node Galera clusters cannot form a real majority. My workaround was `pc.weight=2` on the cloud node, so that when the WireGuard tunnel dropped, the cloud side kept quorum and the homelab node went non-primary. That's the right direction to fail in, but it's still a hack - a weighted vote pretending to be a majority.
+
+### Problem 3: Massive overprovisioning
+
+The dnsdist-only nameservers sat at a load average of roughly 0.0 with half a gigabyte of RAM in use, on machines with 2 vCPUs and ~4 GB each. Five servers for a handful of zones, and none of them earning their keep individually. The monthly bill was the most honest metric of all: it kept telling me this design was wrong.
+
+## The Consolidation: Five Becomes Three
+
+The fix was conceptually simple: **stop treating the frontend and the backend as separate machines.** PowerDNS and MariaDB/Galera moved directly onto both public nameservers, and the dedicated database server was decommissioned entirely.
+
+| Host | Before | After |
+|------|--------|-------|
+| ns1 (Helsinki) | dnsdist only | dnsdist + PowerDNS + MariaDB/Galera |
+| ns2 (Nuremberg) | dnsdist only | dnsdist + PowerDNS + MariaDB/Galera |
+| db01 | PowerDNS + Galera | **decommissioned** |
+| pdns-home | PowerDNS + Galera | third Galera node (failover only) |
+| monitoring | Prometheus stack | migrated to a smaller instance |
+
+Each nameserver is now fully self-contained: it holds a complete, synchronously replicated copy of all zone data and can answer every query locally. The monitoring stack also moved to a smaller instance type in the same pass. Net result: two cloud servers gone, roughly 30 € per month saved, and - counterintuitively - *better* failure characteristics.
+
+## The Key Design: PowerDNS on Localhost, dnsdist in Front
+
+The trick that makes the consolidation work is port separation. On each nameserver, dnsdist owns port 53 on the public interfaces, while PowerDNS listens only on localhost:
+
+```ini
+# /etc/powerdns/pdns.conf (excerpt)
+launch=gmysql
+local-address=127.0.0.1
+local-port=5300
+
+gmysql-host=127.0.0.1
+gmysql-dbname=pdns
+gmysql-dnssec=yes
+
+enable-lua-records=yes
+api=yes
+webserver-address=127.0.0.1
+```
+
+dnsdist then fronts it with a `firstAvailable` policy: the local backend has `order=1` and takes every query as long as it's healthy. The homelab node remains configured as `order=2` - a pure emergency fallback:
+
+```lua
+-- /etc/dnsdist/dnsdist.conf (excerpt)
+setLocal('192.0.2.10:53')          -- public v4 (example address)
+addLocal('[2001:db8::10]:53')      -- public v6 (example address)
+
+newServer({
+  address = '127.0.0.1:5300',
+  name = 'pdns-local',
+  order = 1,
+  checkType = 'SOA',
+  checkName = 'mtxdns.com.'
+})
+newServer({
+  address = '10.1.0.150:53',       -- homelab node over WireGuard
+  name = 'pdns-fallback',
+  order = 2
+})
+
+setServerPolicy(firstAvailable)
+```
+
+This changes the role of the home connection completely. Before, it carried 50% of production answers. Now it carries **zero** - it only ever sees a query if the local PowerDNS on a nameserver dies while dnsdist is still up. The hot path is `dnsdist → 127.0.0.1 → local database`, with no network hop at all.
+
+You still get everything dnsdist is good at: health checking with automatic eviction, rate limiting, an ACL, native Prometheus metrics, and the ability to restart or upgrade PowerDNS underneath without the public port ever going down.
+
+## Three-Node Galera: Real Quorum, No Weight Tricks
+
+With PowerDNS on both nameservers, the Galera cluster naturally grew to three nodes - two in the cloud, one in the homelab, all communicating over WireGuard:
+
+```ini
+# /etc/mysql/mariadb.conf.d/60-galera.cnf (excerpt)
+[galera]
+wsrep_on                 = ON
+wsrep_provider           = /usr/lib/galera/libgalera_smm.so
+wsrep_cluster_name       = dns_galera
+wsrep_cluster_address    = gcomm://10.1.0.150,10.15.0.3,10.15.0.4
+wsrep_sst_method         = rsync
+```
+
+The `pc.weight` hack is gone. Three nodes means a real majority: if the WireGuard tunnel to the homelab drops, the two cloud nodes keep quorum and the homelab node correctly goes non-primary. No configuration pretending, just arithmetic.
+
+One operational lesson worth passing on: on Debian, **disable `mariadb.socket` before the first start** when running Galera. systemd socket activation grabs port 3306 before `mariadb.service` runs, and the `galera_recovery` pre-start step spawns its own `mariadbd` that then fails with *"Address already in use"* - after five attempts systemd gives up permanently and the node silently never rejoins. I learned that one the hard way when a node stayed down for 27 hours after a clean reboot.
+
+A nice side effect of Galera for DNS specifically: PowerDNS stores DNSSEC keys in the `cryptokeys` table, so key material replicates to every node automatically. Both nameservers serve byte-identical DNSKEYs and signatures without any AXFR choreography.
+
+## Monitoring
+
+The monitoring box runs a Prometheus + Alertmanager stack (with Telegram notifications) plus Grafana and blackbox probes. The DNS-relevant coverage:
+
+- **dnsdist native metrics** - both frontends export `/metrics`, restricted to the private network, so I can alert on `DNSDistBackendDown` and, more importantly, `DNSDistNoHealthyBackend`.
+- **Galera health** - a small textfile collector exports `wsrep` state (cluster size, primary status, local node health) via node_exporter every 60 seconds, with alerts for a degraded cluster or a non-primary node.
+- **End-to-end checks** - blackbox probes query the public nameservers directly, because "the process is running" and "the internet gets correct answers" are two very different claims.
+
+The rule I keep re-learning: every migration is only done when the alert count afterwards is zero *and* every target is up. A dashboard nobody checks is decoration; an alert that fires on Telegram at the right moment is infrastructure.
+
+## Is It Actually Resilient?
+
+Honest assessment: **the DNS path yes, the web path no.**
+
+The DNS side is genuinely solid now. Two geographically separated nameservers (Helsinki and Nuremberg), both dual-stack, each fully self-contained with its own replicated copy of the data, each with an independent fallback backend. Any single machine, datacenter, or tunnel can fail and resolution continues. The consolidation also removed the ugliest coupling of the old design, where one nameserver and the only cloud database backend shared a datacenter.
+
+The web side of the platform is a different story. Everything HTTP flows through **one** reverse proxy, and behind it several sites are served from a residential DSL backend. If that proxy dies, multiple sites go dark simultaneously - and the health-check-based LUA failover record has exactly one candidate in its map. That's the real single point of failure, and it's a deliberate, documented debt rather than an accident. DNS was the priority; the web path is next.
+
+## Honest Gaps
+
+Things that are not where they should be yet:
+
+- **DNSSEC is not fully rolled out.** The main zone is signed (ECDSA P-256, DS published at the registrar, AD flag validated end-to-end through both nameservers - including live-signed LUA records, which was the scariest test). But the remaining zones are still unsigned, and for a DNS provider "partially DNSSEC" is not a bragging state.
+- **Zone backups are ad hoc.** Galera replicates, but replication is not a backup - a bad write replicates too. A scheduled `pdnsutil` zone dump into version control is on the list and embarrassingly cheap to do.
+- **The registrar is the last unexamined SPOF.** Delegation and glue records live at the registrar, and I've already been bitten once by a stale glue record pointing at an IP I no longer owned. The path above your own nameservers deserves the same scrutiny as the path below.
+
+## Lessons Learned
+
+1. **Consolidation can increase resilience.** Fewer machines meant each remaining one became self-sufficient. Five fragile specialized servers lost to three robust generalists.
+2. **Keep residential links out of the hot path.** Fallback: fine. Fifty percent of production answers: not fine.
+3. **Odd-numbered clusters or don't bother.** Two-node Galera with weight tricks is a workaround; three nodes is a design.
+4. **Localhost is the best network.** PowerDNS on 127.0.0.1 behind dnsdist gives you a control plane on the public port with zero added latency.
+5. **Verify with answers, not with configs.** After every change I diff actual DNS responses across all backends - dozens of name/type pairs - not config files or zone dumps.
+6. **Cost is a design signal.** The monthly bill flagged the overprovisioning long before any dashboard did.
+
+## Conclusion
+
+Running your own authoritative DNS is absolutely worth doing - not because it's cheaper than a hosted service (it isn't, once you count your evenings), but because nothing else teaches you how the internet's most load-bearing protocol actually behaves under failure.
+
+The consolidated architecture - PowerDNS with a locally replicated Galera database on every nameserver, dnsdist in front with `firstAvailable` - is the version I wish I had built first. Each nameserver is an island that happens to synchronize; the cluster is a real three-node quorum; the monitoring tells me when reality diverges from intent. And it costs less than the worse version did.
+
+Next up: finishing the DNSSEC rollout across all zones, automated zone backups, and finally dealing with that web-path SPOF.

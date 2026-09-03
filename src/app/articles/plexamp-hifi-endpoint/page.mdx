@@ -1,0 +1,183 @@
+import { ArticleLayout } from '@/components/ArticleLayout'
+
+export const article = {
+    author: 'Jannik Schröder',
+    date: '2026-12-13',
+    title: 'Building a Dedicated HiFi Endpoint with Plexamp',
+    description:
+        "How I turned a headless Linux box into a single streaming endpoint for my vintage amplifier - Plexamp headless, AirPlay 2, and Spotify Connect all feeding one USB DAC through PipeWire, with automatic source switching and a self-healing fix for a flaky USB connection.",
+}
+
+export const metadata = {
+    title: article.title,
+    description: article.description,
+}
+
+export default (props) => <ArticleLayout article={article} {...props} />
+
+## The Goal
+
+My stereo is built around a Sony integrated amplifier from around 1980. It has no tuner, no digital inputs, no network anything - just RCA jacks. What I wanted was simple to state and surprisingly fiddly to build:
+
+- **One headless Linux box** connected to the amp via a USB DAC
+- **One name on the network.** Whether I open Plexamp, hit AirPlay on an iPhone, or use Spotify Connect, the target is always called **"Jannik HiFi"**
+- **No fighting over the output.** Whichever source starts playing takes over; the others get out of the way
+- **Set-and-forget reliability.** No keyboard, no monitor, survives reboots and power cuts
+
+The build: Plexamp headless as the primary player, PipeWire as the audio backbone, Shairport Sync for AirPlay 2, librespot for Spotify Connect, and a small pile of systemd glue to make it all behave like an appliance.
+
+## The Hardware
+
+The endpoint is a used Lenovo ThinkCentre M93p - a small Haswell-era business machine that idles around 10-15 W and is completely silent at music workloads. Audio leaves the box through my Topping-class USB DAC (a D10s) into the amp's AUX input.
+
+The DAC is a UAC2 device: driverless under Linux, shows up as a plain ALSA card. I deliberately skipped both the bargain-bin tier (a 16-bit/48 kHz DAC would downsample a FLAC-first library at its cheapest link) and the audiophile tier (a 45-year-old amplifier dominates the noise floor long before a fancier DAC would matter).
+
+One early quality-of-life fix: blacklist the onboard audio so the DAC is the only card in the system and always gets index 0.
+
+```text
+# /etc/modprobe.d/blacklist-onboard-audio.conf
+blacklist snd_hda_intel
+blacklist snd_hda_codec_hdmi
+```
+
+## Plexamp Headless on x86-64
+
+There's a persistent belief that Plexamp headless is Raspberry Pi only. It isn't - that impression comes from the popular community installers, which are ARM-only. The official headless tarball ships `linux-x64` alongside the ARM builds, so it runs fine on a regular PC. You need Node.js 18 or newer (the distro package is enough) and a Plex Pass for the headless player.
+
+Two things in the tarball need attention before it's fit for a server:
+
+1. **The bundled systemd unit assumes a Pi.** It hardcodes `User=pi` and `/home/pi/plexamp`. I run it as a dedicated `plexamp` system user from `/opt/plexamp` instead.
+2. **The bundled upgrade script auto-updates and restarts the service unprompted.** On an appliance I want pinned versions and manual updates, so I stripped its execute bit and left it there as documentation.
+
+My unit looks roughly like this (some lines are foreshadowing - more on `ExecStartPre` later):
+
+```ini
+# /etc/systemd/system/plexamp.service
+[Unit]
+Description=Plexamp headless
+After=network-online.target sound.target
+Wants=network-online.target
+
+[Service]
+User=plexamp
+Group=audio
+WorkingDirectory=/opt/plexamp
+Environment=XDG_RUNTIME_DIR=/run/user/%U
+ExecStartPre=-/usr/bin/amixer -c D10s set 'D10s ',0 mute
+ExecStartPre=-/usr/bin/amixer -c D10s set 'D10s ',0 100% unmute
+ExecStart=/usr/bin/node /opt/plexamp/js/index.js
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+```
+
+(Yes, the mixer control name on this DAC really has a trailing space. That one cost me twenty minutes.)
+
+**First-run gotcha:** the initial sign-in runs interactively in the foreground and asks for a short-lived, single-use code from your Plex account, then the player name. The prompts use readline and *discard type-ahead*, so piping the answers in silently hangs - no error, no output, nothing. If you need to automate it, use an `expect` script that genuinely waits for each prompt before answering. Once signed in, it runs as a normal service and the web UI is on port 32500.
+
+Networking-wise the box lives in the same VLAN as the phones and laptops that control it, with a static DHCP reservation (say `10.2.0.50/24`). Keeping player and controllers in one broadcast domain means local discovery just works, with no mDNS reflection tricks.
+
+## PipeWire as the Audio Backbone
+
+I originally ran Plexamp straight on ALSA - exclusive device access, bit-perfect, minimal moving parts. That's a fine setup for a single source, but it can't share the DAC with AirPlay and Spotify, and (spoiler) it turned out to be fragile against USB hiccups.
+
+So the backbone became PipeWire with WirePlumber, running as *user* services under the same `plexamp` system user, with lingering enabled so the session starts at boot without anyone logging in:
+
+```bash
+loginctl enable-linger plexamp
+```
+
+WirePlumber pins the USB DAC as the default sink, disables suspend on it, and allows the sample rates the DAC supports so the graph follows the source material instead of resampling everything:
+
+```text
+# ~/.config/wireplumber/wireplumber.conf.d/99-hifi.conf
+monitor.alsa.rules = [
+  { matches = [ { node.name = "~alsa_output.usb-Topping.*" } ]
+    actions = { update-props = {
+      session.suspend-timeout-seconds = 0
+      priority.session = 2000
+    } }
+  }
+]
+```
+
+```text
+# ~/.config/pipewire/pipewire.conf.d/99-rates.conf
+context.properties = {
+  default.clock.rate = 48000
+  default.clock.allowed-rates = [ 44100 48000 88200 96000 176400 192000 ]
+}
+```
+
+Plexamp stays a system unit but points at the shared PipeWire session via `XDG_RUNTIME_DIR` and simply outputs to the default device. Every source now converges on one graph and one sink.
+
+## AirPlay 2 and Spotify Connect
+
+**AirPlay 2** is handled by Shairport Sync built with AirPlay 2 support, plus its companion timing daemon NQPTP. Both are built from pinned source releases. The relevant config is tiny:
+
+```text
+// /etc/shairport-sync.conf
+general = {
+  name = "Jannik HiFi";
+  output_backend = "pipe"; // via pipewire in my build
+};
+```
+
+**Spotify Connect** comes from librespot (via the raspotify packaging, which works fine on x86-64 despite the name). It announces itself over zeroconf, so there are no credentials stored on the box - the Spotify app on any phone in the network just sees the device and hands over playback. Premium is required for Connect.
+
+```text
+# /etc/raspotify/conf
+LIBRESPOT_NAME="Jannik HiFi"
+LIBRESPOT_BITRATE="320"
+LIBRESPOT_INITIAL_VOLUME="25"
+```
+
+All three services deliberately advertise the identical name. From any app on any device in the house, the stereo is just "Jannik HiFi".
+
+## Last Source Wins: Automatic Focus
+
+With three receivers sharing one sink, you need a policy for who owns the output. Mine is: **the last source to start playing wins.**
+
+A small helper script, `hifi-audio-focus`, implements the handover: when one source starts, it pauses Plexamp (via its local API) and restarts the other receiver's unit, which drops any active session. Shairport Sync and librespot come straight back up idle, so they remain discoverable - they just aren't playing.
+
+Detecting "Plexamp started playing" needed one extra piece, a tiny monitor unit that polls Plexamp's state and calls the focus script on a transition to playing:
+
+```ini
+# hifi-plexamp-monitor.service (user unit)
+[Service]
+ExecStart=/usr/local/bin/hifi-plexamp-monitor
+Restart=always
+```
+
+It sounds crude, but the switchover in all three directions is seamless: start an AirPlay stream and Plexamp pauses; hit play in Plexamp and Spotify gets kicked. Nobody in the household has to think about it, which was the entire point.
+
+## The USB Disconnect Saga
+
+Now the fun part. Shortly after going live, Plexamp started **pausing mid-track** and refusing to resume. The obvious suspects were all innocent: the server had delivered the full FLAC, the network was clean, and the Plexamp process was alive - it just bounced between `buffering` and `paused`.
+
+The kernel log told the real story: the DAC was **dropping off the USB bus and re-enumerating**, twice within a couple of minutes, exactly at the timestamps of the pauses. With direct ALSA output, a device disconnect destroys the output stream, and the player has nowhere to go. The mid-track pause wasn't a software bug at all - it was hardware, honestly reported.
+
+PipeWire already softens this (the graph survives a sink vanishing), but I wanted the box to fully heal itself. The fix is a udev rule that fires on the DAC re-appearing:
+
+```text
+# /etc/udev/rules.d/90-usb-dac.rules
+ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="152a", ATTR{idProduct}=="8750", \
+  ATTR{power/control}="on", TAG+="systemd", ENV{SYSTEMD_WANTS}="dac-recover.service"
+```
+
+It also forces `power/control=on`, taking USB autosuspend out of the equation entirely. The recovery service waits a few seconds for enumeration to settle, resyncs the DAC (see the next section for why), and restarts Plexamp so it reattaches to a clean stream. Since then, a USB hiccup means at worst a few seconds of silence followed by music - no stuck players, no SSH sessions at 11 pm.
+
+## Two Gotchas Worth Knowing
+
+**Your DAC's firmware can be muted while the host says it isn't.** My longest debugging session on this project was a "no sound" state where every layer looked healthy: USB stream running, the DAC's display locked to the sample rate, the ALSA mixer showing full volume and unmuted, the stream state `RUNNING`. The cause was the DAC firmware being internally muted while the host-side mixer state claimed otherwise. The fix is embarrassingly simple - toggle mute off and on again via `amixer`, which resyncs the firmware. That's what those two `ExecStartPre=-` lines in the Plexamp unit are for: every service start (including after USB recovery) begins with a mute/unmute cycle. Cheap insurance.
+
+Related diagnostic tip: touching the center pin of an RCA cable and listening for hum splits the analog chain in seconds. If it hums, cable and amp are fine and your problem is upstream.
+
+**Claiming the player is time-boxed and unforgiving.** The sign-in code from your Plex account is valid for only a few minutes and single-use, and as mentioned above, the interactive prompt silently eats piped input. Do the first run attended (or with a proper expect script), and only then enable the service.
+
+## Closing Thoughts
+
+The finished box is exactly what I wanted: a silent machine behind the stereo that presents one name to every app in the house, plays whatever was started last, and recovers from its own hardware quirks without help. The stack - Plexamp headless, PipeWire, Shairport Sync, librespot, and a handful of systemd units - is all reproducible from pinned versions and a few config files.
+
+If you're building something similar, my advice: put PipeWire in the middle even if you start with one source, treat every bundled service file and upgrade script as a suggestion rather than a solution, and when audio mysteriously disappears, check the kernel log before you blame the player. The truth is usually in `dmesg`.

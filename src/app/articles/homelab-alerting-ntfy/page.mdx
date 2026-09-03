@@ -1,0 +1,139 @@
+import { ArticleLayout } from '@/components/ArticleLayout'
+
+export const article = {
+    author: 'Jannik Schröder',
+    date: '2026-11-01',
+    title: "Alerting That Doesn't Cry Wolf: LibreNMS + ntfy + LTE-SMS Failover",
+    description:
+        "How I rebuilt my homelab alerting around self-hosted ntfy for push notifications, kept an LTE SMS path via a Teltonika RUT200 as a true last resort, and learned the hard way why escalation rules need narrow scopes and generous delays.",
+}
+
+export const metadata = {
+    title: article.title,
+    description: article.description,
+}
+
+export default (props) => <ArticleLayout article={article} {...props} />
+
+## Introduction
+
+There's a failure mode in monitoring that has nothing to do with technology: after the tenth notification that turned out to be nothing, you stop reading them. Alert fatigue is how outages slip past a fully functional monitoring stack.
+
+My homelab monitoring had drifted into exactly that territory. Every alert went out as an SMS through an LTE router — every false positive cost real money, woke me up at night, and slowly trained me to ignore the channel that was supposed to be sacred.
+
+This article is about the rebuild: LibreNMS as the monitoring base, self-hosted ntfy as the default push channel, and SMS demoted to a single, narrowly scoped job — telling me when the notification path itself is broken. And, because no alerting article is honest without one, the story of the false alarm that forced me to fix my own escalation rule.
+
+## The Base: LibreNMS Watches Everything
+
+LibreNMS is the foundation. Around 50 devices are enrolled — hypervisors, VMs, NAS boxes, switches, firewalls, access points, even the LTE router itself — plus roughly 70 service checks on top. The coverage goes well beyond "does it ping":
+
+- **systemd health** on every Linux VM via an SNMP extend script (any failed unit turns the service red)
+- **Container health** on Docker hosts, checked against a per-host expected-container inventory: a stopped container is CRITICAL, an unexpected new one is WARNING
+- **ZFS pool state and SMART** on the NAS and the hypervisor
+- **Firewall failover state** (CARP master/backup roles as SNMP services, so a silent failover triggers an alert)
+- **HTTP and certificate checks** for public endpoints, with cert-expiry warnings at 30 and 14 days
+- **GPU health** on the AI node (temperature threshold, driver reachability)
+
+That depth is the whole point of monitoring — but it's also exactly what makes a naive notification setup unbearable. Seventy service checks that all page you via SMS is not alerting, it's a subscription to anxiety.
+
+## The Problem With SMS-for-Everything
+
+The SMS path itself is genuinely good infrastructure: a Teltonika RUT200 LTE router with a prepaid SIM, driven by a tiny local HTTP shim (the RutOS REST API needs a login/token dance that LibreNMS's stateless API transport can't do). It works, it's independent of my internet uplink, and it has survived real outage tests.
+
+But as the *default* channel it had three problems:
+
+1. **Cost.** Every alert and every recovery is a paid SMS segment. Monitoring depth became directly proportional to phone bill.
+2. **Noise sensitivity.** LibreNMS polls every five minutes with a fairly aggressive ping check. A single missed poll cycle — a backup snapshot freezing a VM for a few seconds, a firewall filter reload — looked identical to an outage and produced a "down" plus "up" SMS pair five minutes apart. Analyzing a month of alert history, 13 of 19 alert windows were exactly one poll cycle long. The host was never actually down.
+3. **Fatigue.** See above. The channel that should mean "get out of bed" was mostly saying "a VM blinked".
+
+The five-minute blips I mitigated with alert delays (an alert must survive two consecutive failed polls before it dispatches). But the structural fix was to stop using SMS as the default channel entirely.
+
+## Self-Hosted ntfy as the Default Channel
+
+[ntfy](https://ntfy.sh) is a simple pub-sub push notification server: HTTP POST a message to a topic, and the official mobile app delivers it as a push notification. I run my own instance rather than using the public one, so the alert path stays under my control:
+
+- Docker container, image pinned by digest, read-only filesystem, all capabilities dropped
+- `auth-default-access: deny-all` and signup disabled — nothing is readable or writable anonymously
+- A read-only user for my phone, and a separate write-only token that only LibreNMS holds
+- Published through my reverse proxy with a proper Let's Encrypt certificate at `ntfy.example.com`, with a firewall rule allowing exactly one path: proxy to ntfy backend
+
+The relevant part of the server config:
+
+```yaml
+# server.yml
+base-url: "https://ntfy.example.com"
+listen-http: "10.10.0.20:8093"
+auth-default-access: "deny-all"
+enable-signup: false
+# iOS needs the upstream for instant delivery; message
+# content is still fetched from my own server
+upstream-base-url: "https://ntfy.sh"
+```
+
+That last line matters for the story later: instant delivery on iOS requires relaying a wake-up poke through the public ntfy.sh upstream. The message itself never leaves my server — but the *push path* has an external dependency.
+
+In LibreNMS, ntfy is just an API transport: an HTTP POST to the topic with a bearer token, wired into the alert operations so that **both problems and recoveries** go to the app. That part is non-negotiable for me. An alert without a matching recovery forces you to log in and check whether it's still true — which is homework, and homework gets skipped.
+
+## Tiered Escalation: ntfy First, SMS as Out-of-Band Last Resort
+
+The new design has exactly two tiers:
+
+| Tier | Trigger | Problem via | Recovery via |
+|------|---------|-------------|--------------|
+| Normal | Any device/service alert (rules 1–9) | ntfy push | ntfy push |
+| Escalation | The notification path itself is down (rule 10) | SMS via RUT200 (LTE) | ntfy push |
+
+The reasoning: push notifications through my own ntfy server cover every normal failure. But that path depends on my server, my reverse proxy, my firewall, and my internet uplink. If *those* fail, ntfy can't tell me that ntfy is broken. That's what the SMS path is for now — a genuinely out-of-band channel that shares nothing with the primary path except the router's power outlet. The RUT200 talks straight to the mobile network; it doesn't care whether my uplink, my proxy, or my whole DMZ is on fire.
+
+To detect that case, LibreNMS monitors the notification path itself with two dedicated services:
+
+- `health-ntfy-channel` — the local ntfy server's `/v1/health` endpoint
+- `health-ntfy-upstream` — the public ntfy.sh upstream that iOS push delivery depends on
+
+And one escalation rule that is the *only* thing in the entire system still allowed to send an SMS:
+
+```text
+Rule: "Notification path unavailable -> RUT SMS"
+Match:    services.service_status != 0
+      AND services.service_name = "health-ntfy-channel"
+      AND macros.device_up = 1
+Delay:    600s
+Problem:  -> SMS transport (RUT200)
+Recovery: -> ntfy push
+```
+
+Even the SMS template is deliberate: a fixed, ASCII-only message that renders to well under 160 GSM-7 characters, so an escalation is always exactly one SMS segment. Recovery goes via ntfy on purpose — if the recovery can be delivered as a push, the push path is working again, and that fact *is* the recovery message.
+
+I tested the whole chain end to end by deliberately breaking the ntfy health check: push alert fired, exactly one SMS arrived over LTE, and both recoveries came back through ntfy once I restored it. Satisfying.
+
+## The False Alarm That Proved the Rule Wrong
+
+Three days after rollout, my phone buzzed with an SMS: `ALARM: notification path down`. Then again the next day — including once at 03:20 at night. Out of bed, laptop open, and… everything was green. My ntfy server had never been down. Not once.
+
+The culprit was the *upstream* check. My original escalation rule matched any service named `health-ntfy-*` — which included `health-ntfy-upstream`, the check against the public ntfy.sh service. That check was hitting occasional ten-second socket timeouts, each lasting exactly one poll cycle. Root cause, delightfully mundane: unlike my other external checks, this one wasn't forcing IPv4, so it resolved the AAAA record first and went out over an IPv6 path that was flaky at the time.
+
+So the actual failure chain was: *a third party's endpoint blipped over a bad route, and my "last resort" escalation converted that into a paid SMS that woke me up.* The design error wasn't the check — monitoring the upstream is correct, since iOS push depends on it. The error was the **scope of the escalation rule**. A prefix match quietly promoted a third-party dependency to the same severity as my own delivery path being dead.
+
+The fix, in three parts:
+
+1. **Narrow the scope.** Rule 10 now matches `health-ntfy-channel` *only* — my own server, my own path. The upstream check still exists, but it alerts via ntfy like everything else. (If ntfy.sh blips, ntfy can still tell me — Android push and message fetch don't depend on it.)
+2. **Raise the delay.** The SMS rule's delay went from 180 to 600 seconds. A single missed poll can no longer trigger an SMS even for my own channel; it has to stay down across multiple cycles.
+3. **Fix the check itself.** The upstream probe now forces IPv4 and got a longer timeout, matching every other external check.
+
+Since then: zero SMS. The channel is quiet, which is exactly what makes it trustworthy.
+
+## Design Principles I'm Keeping
+
+If I compress the whole project into rules I'd apply anywhere:
+
+- **Every alert must have a recovery**, on the same channel. Open-ended alerts create homework, and homework creates fatigue.
+- **The escalation channel must be out-of-band.** If your pager shares a failure domain with the thing it monitors, it's decoration. LTE-SMS via a cheap router is a surprisingly good answer for a homelab.
+- **Scope escalation rules to exactly one question.** Mine is "can I still receive push notifications from my own server?" — nothing else deserves an SMS.
+- **Delays are a feature, not a compromise.** A five-minute poll interval means the smallest observable outage is five minutes; alert only on what survives two cycles. Real outages arrive a few minutes later, false ones don't arrive at all.
+- **Monitor your dependencies, but don't escalate on them** like they're your own infrastructure. The upstream check earned its place — on the quiet channel.
+
+## Conclusion
+
+The stack itself is unremarkable, and that's a compliment: LibreNMS polls everything, ntfy delivers everything, and one LTE router sits in the corner waiting for the single scenario where it's needed. What changed my relationship with alerting wasn't a tool — it was economics. Push made deep monitoring free, so I can alert on everything without flinching, and SMS became rare enough that a text from my infrastructure means it's real.
+
+The wolf is still out there. But now, when someone cries wolf, I run.

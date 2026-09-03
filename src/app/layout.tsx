@@ -1,9 +1,23 @@
 import { type Metadata } from 'next'
+import localFont from 'next/font/local'
 
-import { Providers } from '@/app/providers'
-import { Layout } from '@/components/Layout'
+import '@/styles/globals.css'
 
-import '@/styles/tailwind.css'
+// The woff2 files live in the repo (latin subset, variable weight) so the build
+// never has to reach fonts.gstatic.com.
+const sans = localFont({
+  src: '../fonts/Inter-latin-variable.woff2',
+  weight: '100 900',
+  display: 'swap',
+  variable: '--font-inter',
+})
+
+const mono = localFont({
+  src: '../fonts/JetBrainsMono-latin-variable.woff2',
+  weight: '100 800',
+  display: 'swap',
+  variable: '--font-jetbrains',
+})
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'
 
@@ -35,20 +49,18 @@ export const metadata: Metadata = {
   },
 }
 
+// Deliberately bare: every page owns its own chrome.
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className="h-full antialiased" suppressHydrationWarning>
-      <body className="flex h-full bg-zinc-50 dark:bg-black">
-        <Providers>
-          <div className="flex w-full">
-            <Layout>{children}</Layout>
-          </div>
-        </Providers>
-      </body>
+    <html
+      lang="en"
+      className={`${sans.variable} ${mono.variable} h-full antialiased`}
+    >
+      <body className="bg-bg text-fg min-h-full font-sans">{children}</body>
     </html>
   )
 }

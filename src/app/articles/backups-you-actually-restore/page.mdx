@@ -1,0 +1,136 @@
+import { ArticleLayout } from '@/components/ArticleLayout'
+
+export const article = {
+    author: 'Jannik Schröder',
+    date: '2026-11-29',
+    title: 'Backups You Actually Restore',
+    description:
+        "An infrastructure audit once flagged my backups as dead. Here's how I rebuilt an offsite backup pipeline over WireGuard, and - more importantly - how I proved it works by actually restoring from it: a full VM boot from a vzdump archive and a restic restore with a verified database.",
+}
+
+export const metadata = {
+    title: article.title,
+    description: article.description,
+}
+
+export default (props) => <ArticleLayout article={article} {...props} />
+
+## A Backup That Was Never Restored Is a Hope, Not a Backup
+
+Some time ago I ran a structured audit over my homelab infrastructure. Most findings were the usual mid-severity noise: missing monitoring here, an outdated package there. But one finding was marked **critical**, and it was just two words:
+
+> **Backups dead.**
+
+That stung, because on paper everything looked fine. Backup jobs were configured. Timers were enabled. Storage was mounted. But nobody had actually *restored* anything in months, and when I looked closer, parts of the pipeline had been silently broken for days.
+
+That's when I internalized the thesis of this article: **a backup that was never restored is a hope, not a backup.** You don't have backups until you've proven you can get your data back. Everything else is wishful thinking with a cron schedule.
+
+This is the story of fixing my offsite backup pipeline and, more importantly, *proving* it works.
+
+## The Setup: Offsite Over WireGuard
+
+My offsite target lives at a friend's place - far enough away that a fire, flood, or burglary at home doesn't take out both copies. The connection is a **WireGuard site-to-site tunnel** between our networks. On his end sits a NAS exposing an **SMB share**, reachable only through the tunnel at RFC1918 addresses (think `10.255.0.0/24` for the tunnel network - nothing is exposed to the public internet).
+
+On my Proxmox host, the share is configured as a CIFS storage backend:
+
+```text
+# /etc/pve/storage.cfg
+cifs: offsite-nas
+    server 10.255.0.7
+    share offsite-backups
+    smbversion 3
+    username backup-user
+    path /mnt/pve/offsite-nas
+    content backup
+```
+
+The credential lives root-only in `/etc/pve/priv/storage/offsite-nas.pw` (mode 0600) - Proxmox handles that for you when you add the storage.
+
+Two workloads use this target:
+
+1. **Proxmox vzdump backups**: a nightly job at 04:00 that snapshots my ten most critical VMs with zstd compression and `keep-last=4`. (A separate 03:00 job backs up *all* VMs to a local NAS - the offsite job is deliberately limited to what I'd actually need after a disaster.)
+2. **A mail server backup via restic**: my mail stack stores its data in a database, so the backup flow is: database backup with a "restorable" gate, an object snapshot of the mail store, then everything into an **encrypted restic repository** on the same SMB share, with a retention of 14 daily, 8 weekly, and 12 monthly snapshots.
+
+One practical note: the tunnel gives me roughly 20 Mbit/s effective throughput to the share. That's fine for incremental restic snapshots (a few dozen MiB per day), but it means large full VM backups take a while - something to account for when you evaluate job runtimes and set alerting thresholds.
+
+## The Proof, Part 1: Booting a VM From a Backup
+
+Verifying a vzdump archive has levels. The cheapest is a structural check - read the whole archive back from the share and let `vma` verify it:
+
+```bash
+zstd -dc /mnt/pve/offsite-nas/dump/vzdump-qemu-101-*.vma.zst | vma verify -
+# ... VERIFY_OK
+```
+
+`VERIFY_OK` is nice, but it only proves the archive is internally consistent. It doesn't prove the VM inside it actually works. So I went one step further and did a **full end-to-end restore into an isolated test VM**:
+
+```bash
+qmrestore /mnt/pve/offsite-nas/dump/vzdump-qemu-101-*.vma.zst 990 \
+  --storage local-zfs --unique 1
+qm set 990 --onboot 0
+qm set 990 --net0 virtio,bridge=vmbr0,link_down=1
+qm start 990
+```
+
+Three details matter here:
+
+- **`--unique 1`** generates new MAC addresses, SMBIOS UUIDs, and VM generation IDs, so the clone can't be mistaken for the original.
+- **`link_down=1`** keeps the NIC administratively down. The backup contains the production IP configuration, and the restored clone must *never* reach the production network. Combined with `onboot=0`, the test VM is fully sandboxed.
+- **Restore to a scratch storage** (`local-zfs` here), not wherever the original lives.
+
+The restore read all 20 GiB in about 14 minutes (most of it sparse blocks), and the VM **booted cleanly to the network target**. The restored system journal showed the fresh boot; the guest agent only stalled on `systemd-networkd-wait-online` - expected, since I had deliberately cut the link. To be thorough, I also mounted the root filesystem read-only from the host and confirmed the ext4 filesystem, the OS, and the hostname were all intact.
+
+Then I deleted VM 990, its volumes, and the temporary mount. Test done, evidence collected, no leftovers.
+
+That's the difference between "the backup job exited 0" and "I have watched this machine come back from the dead."
+
+## The Proof, Part 2: Restoring the Mail Database
+
+For the restic-based mail backup, "it restored" isn't enough either - the interesting question is whether the **database inside the restore** is actually usable. The verification chain looked like this:
+
+```bash
+# 1. Repository integrity
+restic -r /mnt/pve/offsite-nas/restic-mail check
+# no errors were found
+
+# 2. Full restore of the latest snapshot into a scratch directory
+restic -r /mnt/pve/offsite-nas/restic-mail restore latest \
+  --target /tmp/restore-test
+
+# 3. Verify the database dump inside the restore is restorable
+fdbbackup describe -d file:///tmp/restore-test/fdb-backup
+# Restorable: true
+```
+
+The restore brought back all 46 files (about 34 MiB) - and thanks to restic's deduplication, a repeat run of the same restore took eight seconds. The database backup inside it reported `Restorable: true` with the exact snapshot byte count from the original run, and every line of the mail store's object snapshot parsed cleanly as NDJSON. Scratch directories deleted afterwards.
+
+On top of that, an independent freshness check now runs on its own timer: it fails loudly if the newest snapshot is older than 36 hours. Backups that quietly stop are the worst kind of dead.
+
+## The Gotchas
+
+None of this went smoothly on the first try. Two failures are worth sharing because they're exactly the kind of thing a restore test surfaces and a green job status hides.
+
+**The silently broken pipeline.** After rebuilding a monitoring node, a leftover database backup agent was still configured on it. That remote agent happily picked up distributed backup tasks - but the backup target was a *local* path on the mail server, which the remote agent couldn't write. Result: `File could not be written` errors and backups hanging for days, while everything else looked healthy. The fix was removing the stray agent sections from the config on the wrong node; the daemon reloaded live and only the misbehaving agent stopped. Lesson: in distributed systems, an extra worker in the wrong place is just as dangerous as a missing one.
+
+**The vanished history.** The offsite NAS was migrated to a new share name, and the old share was no longer exported. My Proxmox storage config and the restic repo had to be repointed - and the **old backup history was simply not visible anymore** on the new share. Nothing was lost on the server side, but from my side the retention chain restarted from zero. If your retention policy promises "12 monthly snapshots", a share migration silently resets that promise. Verify what's actually *reachable*, not what once existed.
+
+And a smaller one for the road: an interrupted manual restic session left a stale lock in the repo, which made the next scheduled retention run fail. `restic unlock` fixed it; `--retry-lock 15m` on the `forget --prune` step now prevents a single orphaned lock from turning the job red.
+
+## The Restore-Test Checklist
+
+Here's the checklist I now run through periodically. Steal it.
+
+- [ ] **Read the backup back from the actual target** (not a local cache) and verify its integrity (`vma verify`, `restic check`).
+- [ ] **Restore into an isolated environment**: new VM ID, scratch storage, new MACs/UUIDs (`--unique`), NIC down or on an isolated bridge - the clone must never touch production.
+- [ ] **Boot it.** A backup that mounts is good; a backup that boots is proven.
+- [ ] **Verify the data inside**: mount the filesystem, check the journal for the fresh boot, run the database vendor's own restorability check (`Restorable: true` or equivalent).
+- [ ] **Time the restore** and write the number down - that's your real RTO, and over a slow offsite link it may surprise you.
+- [ ] **Check freshness independently** of the backup job: a separate timer that alerts when the newest snapshot exceeds an age threshold.
+- [ ] **Clean up completely**: test VMs, scratch volumes, temp directories, stale locks.
+- [ ] **Re-run after any migration** of shares, repos, or hosts - and confirm the old history is either reachable or consciously written off.
+
+## Conclusion
+
+The audit finding "backups dead" was the best thing that happened to my backup strategy. Not because the fix was hard - repointing a share and removing a stray agent took an evening - but because it forced the mindset shift: the deliverable of a backup system is not an archive file. It's a **successful restore**, demonstrated recently enough that you'd bet your data on it.
+
+Schedule the restore test like you schedule the backup. Until then, all you have is hope.

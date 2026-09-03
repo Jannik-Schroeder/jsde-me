@@ -1,0 +1,138 @@
+import { ArticleLayout } from '@/components/ArticleLayout'
+
+export const article = {
+    author: 'Jannik Schröder',
+    date: '2026-11-15',
+    title: 'Self-Hosted Mail with Stalwart in a DMZ',
+    description:
+        "Running my own mail server with Stalwart - why I self-host mail despite everyone saying not to, how I moved the mail VM from the trusted LAN into a proper DMZ, and the day my own auto-ban system locked out my reverse proxy.",
+}
+
+export const metadata = {
+    title: article.title,
+    description: article.description,
+}
+
+export default (props) => <ArticleLayout article={article} {...props} />
+
+## Introduction
+
+"Don't self-host email" is probably the most repeated advice in the entire homelab community. And honestly? It's good advice. Email is unforgiving: deliverability depends on reputation systems you don't control, a misconfigured relay makes you a spam cannon within hours, and the moment mail silently stops arriving, you won't notice until it's too late.
+
+I self-host my mail anyway. This article is about how I run it with **Stalwart**, why the mail server no longer lives in my trusted LAN, and what I learned when my own brute-force protection took down webmail for everyone - by banning my own reverse proxy.
+
+## Why Self-Host Mail At All?
+
+The arguments against are well known: big providers treat unknown senders with suspicion, residential IP ranges are on every blocklist, and a mail outage hurts more than any other service going down. So why bother?
+
+- **Ownership**: My mail archive is mine. No provider can lock me out of my own correspondence.
+- **Unlimited addresses and domains**: Every service and project gets its own address without per-mailbox pricing.
+- **Infrastructure mail**: My homelab generates a constant stream of alerts - monitoring, backup reports, NAS health checks. An internal SMTP endpoint that just works is genuinely useful.
+- **Learning**: Running email end-to-end teaches you SMTP, DNS, TLS, and reputation systems in a way no tutorial can.
+
+The honest caveat: this only works if you treat it like production - monitoring, backups, a secondary MX, and the discipline to actually read your DMARC reports.
+
+## Why Stalwart?
+
+The classic self-hosted stack is Postfix + Dovecot + Rspamd + a webmail frontend, glued together with years of accumulated configuration folklore. I went a different route: **Stalwart Mail Server**, a modern all-in-one mail server written in Rust.
+
+What sold me:
+
+- **One binary, all protocols**: SMTP, Submission, IMAP, POP3, JMAP, and ManageSieve in a single service - no glue between five daemons with five config dialects
+- **Built-in security**: Rate limiting, automatic banning of brute-force sources, and spam filtering are first-class features, not bolted-on extras
+- **Management API**: The entire configuration is scriptable over a REST API, which fits an infrastructure-as-code workflow
+- **Rust**: Memory safety in the one service that is directly exposed to the internet is not a bad property to have
+
+The whole thing runs as a single systemd unit on a small Debian VM. Coming from the Postfix world, the simplicity is almost suspicious.
+
+## Moving Mail Into the DMZ
+
+For the first months, the mail VM lived in my server VLAN, right next to everything else. That always bothered me: a mail server is, by definition, a machine that accepts connections triggered by strangers on the internet. If it gets compromised, the attacker should land in a cage - not in the middle of my trusted network.
+
+So as part of my network rebuild, the mail VM moved into a dedicated **DMZ segment**. New IP, new VLAN, and most importantly: a firewall posture where the DMZ is treated as hostile.
+
+The rules that make a DMZ actually a DMZ:
+
+| Rule | Source | Destination | Verdict |
+|------|--------|-------------|---------|
+| Inbound mail | Internet / relay | DMZ mail server, ports 25/465/587/993 | Allow |
+| Internal clients | LAN VLANs | DMZ mail server, mail ports only | Allow |
+| DMZ to internal | DMZ | Any RFC1918 network | **Deny** |
+| DMZ egress | DMZ mail server | Internet: 25, 443, DNS | Allow |
+
+The critical rule is the third one. The DMZ host can be reached from inside, but it cannot initiate anything toward the internal networks. If someone owns the mail server, they see exactly nothing of my LAN. Even ICMP from the DMZ inward is blocked - so you learn to test connectivity with TCP probes instead of ping.
+
+This forced me to be explicit about every single flow. Before the move, nobody had asked which internal networks the mail server could reach. After the move, every allowed connection is a deliberate, documented firewall rule.
+
+## Internal Relay Without Authentication - But Scoped
+
+A homelab is full of things that want to send mail but are terrible at authentication: the NAS, the hypervisor, monitoring, backup jobs, random containers. Giving each of them SMTP credentials is theoretical best practice and practical misery.
+
+My compromise: **unauthenticated relay on port 25, but only from explicitly listed internal subnets** and only for sender addresses of my own domains. Everything else - especially anything from the internet - must authenticate on 587/465 or is rejected. Conceptually:
+
+```toml
+# Relay decision: internal subnets may relay without auth
+[session.rcpt]
+relay = [ { if = "!is_empty(authenticated_as)", then = true },
+          { if = "remote_ip in { '10.10.0.0/24', '10.20.0.0/24', '10.60.0.0/24' }", then = true },
+          { else = false } ]
+```
+
+One real-world wrinkle: appliances are sloppy SMTP citizens. My NAS greets the server with `EHLO nas01` - a bare hostname, no FQDN - and Stalwart correctly rejects that with `550 5.5.0 Invalid EHLO domain`. Your storage box then silently fails to deliver its "a disk just died" email. The fix is to relax the FQDN requirement only for internal source addresses:
+
+```toml
+# Require FQDN in EHLO - except for internal appliances
+[session.ehlo]
+reject-non-fqdn = [ { if = "remote_ip in { '10.10.0.0/24', '10.20.0.0/24' }", then = false },
+                    { else = true } ]
+```
+
+External senders still have to behave. Internal appliances get a pass, because the alternative is missing the one alert that actually matters.
+
+## The Auto-Ban War Story
+
+Stalwart ships with fail2ban-style protection: too many failed logins from an IP, and that IP gets banned automatically. On the internet-facing side this works beautifully - it blocks a steady stream of bots hammering the submission ports every day.
+
+Then one day, webmail died. The frontend loaded, but logins just hung. The JMAP backend accepted TCP connections and then reset them right after the TLS Client Hello. On the mail server itself, every local check passed.
+
+The cause: **Stalwart had auto-banned my own reverse proxy.**
+
+The chain of events is almost elegant in its stupidity:
+
+1. Webmail traffic flows through a reverse proxy doing TLS passthrough - *without* the PROXY protocol
+2. From Stalwart's perspective, every single client therefore has the same source IP: the proxy
+3. That includes every internet brute-force attempt against the login
+4. Failed logins from "one IP" crossed the threshold - and the ban hammer dropped on the proxy
+5. Result: webmail dead for everyone, while the server itself reported perfect health
+
+The infuriating detail: I *had* an exception for exactly this. Stalwart maintains an allowed-IP list of addresses exempt from auto-banning, and the old proxy host was on it. But I had migrated the reverse proxy to a new VM months earlier, and the allow-list still pointed at the IP of a machine that no longer existed.
+
+```toml
+# Infrastructure that must NEVER be auto-banned
+[server]
+allowed-ip = [ "10.60.0.101" ]   # reverse proxy - UPDATE THIS WHEN THE PROXY MOVES
+```
+
+The lessons, in order of importance:
+
+1. **Maintain an explicit allow-list of your own infrastructure IPs** - reverse proxies, monitoring probes, load balancers - and treat it as part of any migration checklist. When a component gets a new IP, its exemptions move with it.
+2. **A reverse proxy without the PROXY protocol blinds your backend.** Every security mechanism keyed on source IP - bans, rate limits, geo rules - degrades to "all or nothing". The proper fix is PROXY protocol v2 so the backend sees real client IPs; the pragmatic fix is the allow-list, accepting that auto-ban won't protect that particular path.
+3. **"The server is healthy" and "the service works" are different claims.** My monitoring checked the server locally and saw nothing wrong. The failure only existed on the network path through the proxy - so that's where the check needs to run.
+
+## Deliverability: The Non-Negotiables
+
+Briefly, because entire books exist on this: if you self-host, three DNS records decide whether your mail lands in inboxes or spam folders.
+
+- **SPF**: declares which hosts may send for your domain - `v=spf1 mx -all`. And exactly *one* TXT record: two SPF records are a permanent error per RFC, failing SPF at every receiver. Ask me how I know.
+- **DKIM**: cryptographically signs outgoing mail; Stalwart manages the keys, you publish the public key in DNS
+- **DMARC**: ties both together and tells receivers what to do on failure. Start with `p=none` and actually read the aggregate reports before moving to `p=reject`.
+
+Add a matching PTR record (forward-confirmed reverse DNS) for your outbound IP, and you're on solid ground with most receivers.
+
+## Conclusion
+
+Self-hosting mail is exactly as unforgiving as everyone says. But with a modern server like Stalwart, a properly segmented DMZ, and tightly scoped internal relay rules, it's a manageable production service - even at homelab scale.
+
+The auto-ban incident is my favorite kind of failure: every component worked precisely as designed, and the system still fell over, because a migration didn't carry an exemption along. Security automation is great, right up until it can't tell your infrastructure from an attacker. Keep that list current.
+
+Would I recommend self-hosting mail? Still no - unless you enjoy this kind of thing. In which case: absolutely.

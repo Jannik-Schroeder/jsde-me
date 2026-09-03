@@ -1,0 +1,161 @@
+import { ArticleLayout } from '@/components/ArticleLayout'
+
+export const article = {
+    author: 'Jannik Schröder',
+    date: '2026-10-04',
+    title: 'HA Self-Hosted S3 with SeaweedFS',
+    description:
+        "Building a highly available, self-hosted S3 service on two NAS boxes and a tiny arbiter VM with SeaweedFS - why I chose it over the alternatives, how the Raft-based architecture works, and the operational limits and pitfalls I learned the hard way.",
+}
+
+export const metadata = {
+    title: article.title,
+    description: article.description,
+}
+
+export default (props) => <ArticleLayout article={article} {...props} />
+
+## Introduction
+
+Object storage has quietly become the default persistence layer for almost everything I build. Application uploads, generated images, database dumps, offsite backup targets - sooner or later it all wants to speak the S3 API. For a while I just pointed everything at a cloud provider, but the combination of egress fees, per-request pricing, and the uneasy feeling of having application data outside my own infrastructure kept nagging at me.
+
+So I built my own: a highly available S3 service running on hardware I already owned, fronted by a reverse proxy with proper TLS. This article covers why I went self-hosted, why I picked **SeaweedFS**, the architecture I landed on, and - most importantly - the operational limits and pitfalls I learned the hard way.
+
+## Why Self-Host S3 at All?
+
+Three reasons pushed me over the edge:
+
+- **Application backends**: One of my side projects generates a lot of images. Storing them on the application node itself doesn't scale and makes the node stateful in an ugly way. An S3 bucket decouples storage from compute.
+- **Backups**: Nearly every backup tool I use (restic, pgBackRest, various dump scripts) speaks S3 natively. Having an S3 endpoint inside my own network makes backup targets trivial.
+- **Cloud egress**: Egress is where cloud object storage quietly gets expensive. Serving generated images back out of a cloud bucket means paying for every download, forever. My data lives on my disks; the only recurring cost is electricity.
+
+There's also a fourth, less rational reason: I wanted to actually understand how a distributed object store behaves when nodes fail - and you only learn that by running one.
+
+## Choosing SeaweedFS
+
+I evaluated the usual suspects before committing:
+
+| Option | Verdict |
+|--------|---------|
+| **MinIO** | Long-time default, but the open-source edition has been progressively wound down - not something I want to build on in 2026 |
+| **Garage** | Solid design, but a smaller ecosystem and I preferred SeaweedFS's volume model |
+| **RustFS** | Promising but too young for data I care about |
+| **versitygw** | S3 gateway only, no real multi-node replication story |
+| **SeaweedFS** | Mature, actively developed, true multi-node HA with Raft, tunable replication |
+
+**SeaweedFS** won. Its architecture is refreshingly explicit: *master* servers form a Raft group and coordinate the cluster, *volume* servers store the actual data in large append-only volume files, a *filer* provides the filesystem/metadata layer, and an *S3 gateway* translates the S3 API onto the filer. You can run all of these as a single `weed server` process per node, which keeps the deployment simple.
+
+## The Architecture
+
+The constraint: I have exactly **two NAS boxes** with real storage. Two nodes is the worst number for any Raft-based system - you can't form a majority when one is down. The fix is a classic one: a third, tiny **arbiter VM** that participates in the Raft quorum but stores no object data.
+
+| Node | Role | Storage |
+|------|------|---------|
+| nas01 | Master + Volume + Filer + S3 | ZFS dataset, 1 TB quota |
+| nas02 | Master + Volume + Filer + S3 | ZFS dataset, 1 TB quota |
+| arbiter01 | Master only (Raft tie-breaker) | None (metadata only) |
+
+The three masters form the Raft group, so the cluster survives the loss of any single node *for coordination purposes*. The arbiter is a minimal Debian VM running the native `weed` binary as a systemd service - no containers, no volumes, just quorum.
+
+On the NAS side, both boxes run SeaweedFS as a pinned container with host networking:
+
+```yaml
+services:
+  seaweedfs:
+    image: chrislusf/seaweedfs:4.42
+    network_mode: host
+    command: >
+      server -master -volume -filer -s3
+      -dir=/data
+      -master.peers=10.0.10.11:9333,10.0.10.12:9333,10.0.10.13:9333
+      -master.defaultReplication=010
+      -volume.max=100
+      -s3.port=8333 -s3.port.https=8443
+      -s3.config=/config/s3.json
+    volumes:
+      - /mnt/tank/s3/data:/data
+      - /mnt/tank/s3/config:/config
+```
+
+The interesting flag is `-master.defaultReplication=010`. SeaweedFS replication placement is a three-digit code: datacenters, racks, servers. `010` means "one extra copy on a different rack" - and I've modelled each NAS as its own rack. Every object therefore exists physically on both NAS boxes. I verified this the honest way: writing objects and checking that identical volume files show up on both machines.
+
+### The Front Door
+
+Nobody should talk to the S3 gateway directly. Externally, everything goes through my reverse proxy:
+
+```
+client ──HTTPS──▶ s3.example.com (reverse proxy, Let's Encrypt)
+                        │ TLS (self-signed backend cert)
+                        ▼
+                  nas01:8443 (SeaweedFS S3 gateway)
+```
+
+The proxy terminates a proper Let's Encrypt certificate for `s3.example.com` and forwards to the S3 gateway on one NAS over TLS with a long-lived self-signed backend certificate. Firewall rules allow exactly this one path - proxy to gateway port, nothing else.
+
+Access control lives in a small `s3.json` identity file: an admin identity, plus a per-application identity that can only touch its own bucket. Least privilege, even at home.
+
+## Operational Limits - Learned Honestly
+
+This is the part most homelab posts skip, so let me be blunt about what this setup *can't* do.
+
+**One NAS down means reads work, writes fail.** This surprised me at first, but it's correct behavior, not a bug. With replication `010`, every write must be placed on both racks. If one rack (NAS) is gone, that placement is impossible and SeaweedFS refuses the write rather than silently degrading your replication guarantee. The Raft quorum surviving via the arbiter keeps the *cluster* healthy - it does not conjure up a second copy of your data. HA here means "no data loss and continued read availability," not "writes survive anything."
+
+**Path-style requests only.** Virtual-hosted-style bucket addressing (`bucket.s3.example.com`) needs wildcard DNS and wildcard SNI handling at the proxy, which mine doesn't do. So every client gets `forcePathStyle: true`:
+
+```js
+const s3 = new S3Client({
+  endpoint: 'https://s3.example.com',
+  region: 'home',
+  forcePathStyle: true,
+})
+```
+
+Every SDK I've touched supports this, but it's a real constraint - some third-party tools assume vhost-style addressing and simply break.
+
+**Failover is manual.** The proxy deliberately points at *one* S3 endpoint, not both. The filer metadata between the two NAS boxes syncs asynchronously and is eventually consistent, so load-balancing across both would risk reading stale metadata right after a write. Failover is a documented one-liner - change the backend IP, reload the proxy - but a human has to run it.
+
+## Pitfalls
+
+Two problems cost me real debugging time; both are worth knowing in advance.
+
+### UID Mapping in Containers
+
+The SeaweedFS container runs as **UID 1000**, not root. I had created `s3.json` as root with mode `600` - security instinct, right? The result was an instant crash loop:
+
+```
+fail to load config file /config/s3.json: permission denied
+```
+
+The fix is boring but mandatory: `chown 1000:1000` on the config *and* the data directory. If your volume mounts come from a ZFS dataset created by root, nothing inside the container can read them until you fix ownership. This is the single most common way to make the container die on startup.
+
+### Raft Quorum Traps
+
+Raft masters are stateful about their peers. During setup I changed the peer list (the arbiter got its final IP later than the NAS boxes), and the masters kept trying to reach the *old* configuration - electing no usable leader while logging cryptic peer errors. Since the cluster was still empty, the pragmatic fix was to wipe the master metadata directories on all three nodes and start fresh with the correct peer list. With data on the cluster you'd want a proper `raft.remove`/add dance instead - which is exactly why you should finalize your peer topology *before* the first byte of production data lands.
+
+The general lesson: a three-node Raft group is easy to run and terrifyingly easy to misconfigure. Treat the peer list as immutable once you're live.
+
+## What I Verified Before Calling It Done
+
+I don't consider infrastructure "live" until failure modes are tested, not assumed:
+
+1. **End-to-end**: put/get/delete through the public endpoint with MD5 comparison
+2. **Physical replication**: identical volume files present on both NAS boxes
+3. **NAS failover**: nas01 down, proxy switched to nas02, reads served correctly
+4. **Arbiter reboot**: leader re-election completed, writes resumed
+5. **Monitoring**: service checks and alerting fire on failure *and* recovery
+
+Every one of these found something to fix on the first attempt. That's the point of doing them.
+
+## What's Still Open
+
+The cluster is live, but the project isn't finished:
+
+- **Application integration**: the image-generating app still writes to local disk. Migrating it means adding the S3 client, wiring credentials through the environment, and moving existing files - a deliberate, separate step.
+- **Offsite backup of the buckets**: two copies on two NAS boxes in one building is redundancy, not a backup. Before real production data lands here, the buckets need an offsite replication target.
+- **Nicer failover**: automated health-checked failover at the proxy would remove the manual step - a proxy feature, not a SeaweedFS one.
+
+## Conclusion
+
+Two NAS boxes, one tiny VM, and SeaweedFS give me an S3 service that survives any single node failure, keeps two physical copies of every object, and costs nothing per gigabyte of egress. The trade-offs are real - writes need both storage nodes, clients must use path-style addressing, and failover is a human action - but they're *known* trade-offs, tested and documented, which is more than I can say about most cloud bills.
+
+If you're considering the same: pick your Raft topology before writing data, check container UIDs before blaming the software, and test your failure modes before you trust them. The S3 API is a commodity now - there's no reason your homelab can't speak it natively.

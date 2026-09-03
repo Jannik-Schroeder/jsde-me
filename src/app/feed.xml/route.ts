@@ -1,5 +1,7 @@
 import { Feed } from 'feed'
 
+import { getAllArticles } from '@/lib/articles'
+
 export async function GET(req: Request) {
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? new URL(req.url).origin
   const author = {
@@ -24,8 +26,7 @@ export async function GET(req: Request) {
     },
   })
 
-  const { getAllArticles } = await import('@/lib/articles')
-  const articles = await getAllArticles()
+  const articles = getAllArticles()
 
   for (const article of articles) {
     const publicUrl = `${siteUrl}/articles/${article.slug}`

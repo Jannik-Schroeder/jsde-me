@@ -1,36 +1,38 @@
-import glob from 'fast-glob'
+import { generatedArticles } from './articles.generated'
 
-interface Article {
+/** Metadata for one article. The single shape every consumer codes against. */
+export interface ArticleMeta {
+  slug: string
   title: string
+  date: string
   description: string
   author: string
-  date: string
 }
 
-export interface ArticleWithSlug extends Article {
-  slug: string
+/** All articles, newest first. */
+/** @deprecated Use getAllArticles() to exclude scheduled articles. */
+export const articles: ArticleMeta[] = [...generatedArticles].sort(
+  (a, z) => +new Date(z.date) - +new Date(a.date),
+)
+
+/** Whether an article date has arrived in Europe/Berlin. */
+export function isPublished(date: string): boolean {
+  const today = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Berlin',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date())
+
+  return date <= today
 }
 
-async function importArticle(
-  articleFilename: string,
-): Promise<ArticleWithSlug> {
-  let { article } = (await import(`../app/articles/${articleFilename}`)) as {
-    default: React.ComponentType
-    article: Article
-  }
-
-  return {
-    slug: articleFilename.replace(/(\/page)?\.mdx$/, ''),
-    ...article,
-  }
+/** Published articles, newest first. Re-evaluates dates on every call. */
+export function getAllArticles(): ArticleMeta[] {
+  return articles.filter((article) => isPublished(article.date))
 }
 
-export async function getAllArticles() {
-  let articleFilenames = await glob('*/page.mdx', {
-    cwd: './src/app/articles',
-  })
-
-  let articles = await Promise.all(articleFilenames.map(importArticle))
-
-  return articles.sort((a, z) => +new Date(z.date) - +new Date(a.date))
+/** All articles, including scheduled articles, newest first. */
+export function getAllArticlesIncludingScheduled(): ArticleMeta[] {
+  return articles
 }
