@@ -1,3 +1,4 @@
+import Script from "next/script";
 import { type Metadata } from 'next'
 import localFont from 'next/font/local'
 
@@ -60,7 +61,14 @@ export default function RootLayout({
       lang="en"
       className={`${sans.variable} ${mono.variable} h-full antialiased`}
     >
-      <body className="bg-bg text-fg min-h-full font-sans">{children}</body>
+      <body className="bg-bg text-fg min-h-full font-sans">{children}<Script
+          src="https://rybbit.scpx.de/api/script.js"
+          data-site-id="3"
+          data-skip-patterns={"[\"/api/**\", \"/auth/**\", \"/callback/**\", \"/verify/**\", \"/reset-password/**\"]"}
+          data-mask-patterns={"[\"/domains/*/**\", \"/customers/*/**\", \"/tickets/*/**\", \"/servers/*/**\", \"/users/*/**\"]"}
+          strategy="afterInteractive"
+        />
+      </body>
     </html>
   )
 }
