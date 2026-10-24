@@ -61,7 +61,13 @@ export default function RootLayout({
       lang="en"
       className={`${sans.variable} ${mono.variable} h-full antialiased`}
     >
-      <body className="bg-bg text-fg min-h-full font-sans">{children}<Script
+      <body className="bg-bg text-fg min-h-full font-sans">{children}
+        <footer className="border-border text-fg-dim mx-auto max-w-[70ch] border-t px-4 py-6 text-xs leading-relaxed">
+          <p>Self-hosted, cookieless page-view analytics.{' '}
+            <a href="https://scpx.de/datenschutz" className="link underline underline-offset-4">Analytics privacy information</a>
+          </p>
+        </footer>
+        <Script
           src="https://rybbit.scpx.de/api/script.js"
           data-site-id="3"
           data-skip-patterns={"[\"/api/**\", \"/auth/**\", \"/callback/**\", \"/verify/**\", \"/reset-password/**\"]"}
