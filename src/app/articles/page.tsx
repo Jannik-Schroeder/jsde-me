@@ -5,6 +5,7 @@ import { type ArticleMeta, getAllArticles } from '@/lib/articles'
 import { formatDate } from '@/lib/formatDate'
 
 export const metadata: Metadata = {
+  alternates: { canonical: 'https://jsde.me/articles' },
   title: 'Articles',
   description:
     'All of my long-form writing on homelab infrastructure, self-hosting and networking, collected in chronological order.',

@@ -1,6 +1,6 @@
 {
   "name": "jsde-me",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "private": true,
   "scripts": {
     "predev": "node scripts/generate-articles.mjs",

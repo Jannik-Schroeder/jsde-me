@@ -6,7 +6,11 @@ import { Terminal } from '@/components/Terminal'
 import { getAllArticles } from '@/lib/articles'
 import { me } from '@/lib/me'
 
+// Refresh the homepage article list as scheduled publication dates arrive.
+export const revalidate = 3600
+
 export const metadata: Metadata = {
+  alternates: { canonical: 'https://jsde.me/' },
   description: me.short,
 }
 

@@ -14,6 +14,7 @@
 import { type Metadata } from 'next'
 
 export const metadata: Metadata = {
+  alternates: { canonical: 'https://jsde.me/uses' },
   title: 'Uses',
   description: 'Hardware, homelab and software this site runs on.',
 }
