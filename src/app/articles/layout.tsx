@@ -1,9 +1,5 @@
-export const revalidate = 3600
-
-export default function ArticlesLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+import { connection } from 'next/server'
+export default async function ArticlesLayout({children}: {children: React.ReactNode}) {
+  await connection()
   return children
 }

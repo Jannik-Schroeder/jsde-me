@@ -5,3 +5,8 @@
 .next
 node_modules
 npm-debug.log
+
+.env.*
+tests
+.superpowers
+*.tsbuildinfo

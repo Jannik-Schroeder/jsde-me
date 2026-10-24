@@ -1,3 +1,4 @@
+import { articleMetadata } from '@/lib/article-metadata'
 import { ArticleLayout } from '@/components/ArticleLayout'
 
 export const article = {
@@ -8,10 +9,8 @@ export const article = {
     'How I drastically reduced my Docker image sizes by better understanding layers - a practical journey.',
 }
 
-export const metadata = {
-  alternates: { canonical: 'https://jsde.me/articles/docker-optimized-builds' },
-  title: article.title,
-  description: article.description,
+export async function generateMetadata() {
+  return articleMetadata(article, 'https://jsde.me/articles/docker-optimized-builds')
 }
 
 export default (props) => <ArticleLayout article={article} {...props} />

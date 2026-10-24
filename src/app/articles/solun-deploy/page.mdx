@@ -1,3 +1,4 @@
+import { articleMetadata } from '@/lib/article-metadata'
 import { ArticleLayout } from '@/components/ArticleLayout'
 
 
@@ -9,10 +10,8 @@ export const article = {
         'In this article we will look at how to deploy Solun and save ourselves most of the work. But at the same time we also want to have a good visible version history that we manage via Discord.',
 }
 
-export const metadata = {
-  alternates: { canonical: 'https://jsde.me/articles/solun-deploy' },
-    title: article.title,
-    description: article.description,
+export async function generateMetadata() {
+  return articleMetadata(article, 'https://jsde.me/articles/solun-deploy')
 }
 
 export default (props) => <ArticleLayout article={article} {...props} />

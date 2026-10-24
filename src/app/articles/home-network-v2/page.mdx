@@ -1,3 +1,4 @@
+import { articleMetadata } from '@/lib/article-metadata'
 import Image from 'next/image'
 import { ArticleLayout } from '@/components/ArticleLayout'
 import rackFront from './rack_front.jpeg'
@@ -11,10 +12,8 @@ export const article = {
         "A complete overhaul of my home network infrastructure - migrating from TP-Link to UniFi, implementing Zero Trust architecture with dynamic VLANs, and building a properly segmented network with 10G fiber uplinks.",
 }
 
-export const metadata = {
-  alternates: { canonical: 'https://jsde.me/articles/home-network-v2' },
-    title: article.title,
-    description: article.description,
+export async function generateMetadata() {
+  return articleMetadata(article, 'https://jsde.me/articles/home-network-v2')
 }
 
 export default (props) => <ArticleLayout article={article} {...props} />

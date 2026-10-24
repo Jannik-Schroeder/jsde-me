@@ -1,3 +1,4 @@
+import { articleMetadata } from '@/lib/article-metadata'
 import { ArticleLayout } from '@/components/ArticleLayout'
 
 export const article = {
@@ -8,10 +9,8 @@ export const article = {
         "How I run Paperless-ngx in my homelab as a document management system for both private and business paperwork - covering my tagging convention, consume-folder automation, the pitfalls I ran into, and why a backup only counts once you've actually restored it.",
 }
 
-export const metadata = {
-  alternates: { canonical: 'https://jsde.me/articles/paperless-ngx-dms' },
-    title: article.title,
-    description: article.description,
+export async function generateMetadata() {
+  return articleMetadata(article, 'https://jsde.me/articles/paperless-ngx-dms')
 }
 
 export default (props) => <ArticleLayout article={article} {...props} />

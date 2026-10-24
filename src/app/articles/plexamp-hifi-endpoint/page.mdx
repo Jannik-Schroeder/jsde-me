@@ -1,3 +1,4 @@
+import { articleMetadata } from '@/lib/article-metadata'
 import { ArticleLayout } from '@/components/ArticleLayout'
 
 export const article = {
@@ -8,13 +9,13 @@ export const article = {
         "How I turned a headless Linux box into a single streaming endpoint for my vintage amplifier - Plexamp headless, AirPlay 2, and Spotify Connect all feeding one USB DAC through PipeWire, with automatic source switching and a self-healing fix for a flaky USB connection.",
 }
 
-export const metadata = {
-  alternates: { canonical: 'https://jsde.me/articles/plexamp-hifi-endpoint' },
-    title: article.title,
-    description: article.description,
+export async function generateMetadata() {
+  return articleMetadata(article, 'https://jsde.me/articles/plexamp-hifi-endpoint')
 }
 
 export default (props) => <ArticleLayout article={article} {...props} />
+
+> This article documents a particular setup and its recorded tests. Addresses in configuration examples use documentation ranges and are not live endpoints. Commands and operational schedules must be checked against your own current environment.
 
 ## The Goal
 
@@ -77,7 +78,7 @@ WantedBy=multi-user.target
 
 **First-run gotcha:** the initial sign-in runs interactively in the foreground and asks for a short-lived, single-use code from your Plex account, then the player name. The prompts use readline and *discard type-ahead*, so piping the answers in silently hangs - no error, no output, nothing. If you need to automate it, use an `expect` script that genuinely waits for each prompt before answering. Once signed in, it runs as a normal service and the web UI is on port 32500.
 
-Networking-wise the box lives in the same VLAN as the phones and laptops that control it, with a static DHCP reservation (say `10.2.0.50/24`). Keeping player and controllers in one broadcast domain means local discovery just works, with no mDNS reflection tricks.
+Networking-wise the box lives in the same VLAN as the phones and laptops that control it, with a static DHCP reservation (say `192.0.2.50/24`). Keeping player and controllers in one broadcast domain means local discovery just works, with no mDNS reflection tricks.
 
 ## PipeWire as the Audio Backbone
 

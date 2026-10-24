@@ -1,3 +1,4 @@
+import { articleMetadata } from '@/lib/article-metadata'
 import { ArticleLayout } from '@/components/ArticleLayout'
 import image from './img.png'
 
@@ -9,10 +10,8 @@ export const article = {
     'We try to structure the Solun network as well as possible and at the same time be as cheap as possible. In this article, we will show you how we have structured our server and what we have chosen for it.',
 }
 
-export const metadata = {
-  alternates: { canonical: 'https://jsde.me/articles/solun-struc' },
-  title: article.title,
-  description: article.description,
+export async function generateMetadata() {
+  return articleMetadata(article, 'https://jsde.me/articles/solun-struc')
 }
 
 export default (props) => <ArticleLayout article={article} {...props} />

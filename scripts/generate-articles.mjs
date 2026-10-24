@@ -195,7 +195,7 @@ for (const slug of slugDirs) {
   })
 }
 
-const EXPECTED_COUNT = 28
+const EXPECTED_COUNT = 32
 if (entries.length !== EXPECTED_COUNT) {
   fail(
     `expected exactly ${EXPECTED_COUNT} articles, found ${entries.length}. ` +

@@ -1,0 +1,49 @@
+import { articleMetadata } from '@/lib/article-metadata'
+import { ArticleLayout } from '@/components/ArticleLayout'
+
+export const article = {
+  "author": "Jannik Schröder",
+  "date": "2026-12-27",
+  "title": "From a Git Commit to the Running Container: Proving What Was Deployed",
+  "description": "Connect source revision, build context, image identity and runtime evidence without treating a mutable tag as proof."
+}
+
+export async function generateMetadata() {
+  return articleMetadata(article, 'https://jsde.me/articles/git-to-running-container-proof')
+}
+
+export default (props) => <ArticleLayout article={article} {...props} />
+
+A pipeline can succeed while a running container still uses an older image. A local checkout can also be newer than the source used to build the live application. Those are separate observations, and a deployment note should connect them explicitly.
+
+The useful chain is source, build input, artifact and runtime. It is not enough to record the same friendly version label at both ends.
+
+## Begin with the source that was actually accepted
+
+Record the exact revision and any deliberate working changes included in the build. A branch name alone can move. Building a different checkout because it happens to be nearby makes later debugging needlessly difficult.
+
+Review the build context too. Local environment files, old build directories, test fixtures and Git history should not enter an image merely because the Dockerfile copies the whole directory. A context exclusion file and a source scan address different parts of that problem.
+
+## Treat the lockfile as an input
+
+A reproducible install starts from the package manifest and its matching lockfile. An audit and a successful build describe that input set at a point in time. They do not prove that a different install command or a later dependency resolution will behave identically.
+
+Record the toolchain and build configuration where they affect behavior. A frontend flag compiled into client assets cannot be repaired by assuming a runtime environment variable will replace it later.
+
+## Check the running artifact
+
+After promotion, inspect the running container's image identity and compare meaningful artifact evidence. A mutable tag is convenient for humans but can be repointed. A version page can also be stale or manually edited.
+
+An artifact comparison may use a build identifier and hashes of the server and static assets. Such evidence should identify exactly what was compared. Differences in image metadata and differences in application bytes are not interchangeable claims.
+
+A public request then checks another boundary: whether the intended hostname and proxy path actually reach the expected application. Container inspection alone cannot prove that routing decision.
+
+## Preserve the previous working state
+
+A constrained web release should not silently restart unrelated services. Capture their identities before and after when that is part of the acceptance condition. Keep the previous image and relevant configuration available until the new release is verified.
+
+For stateful changes, rolling an image back does not automatically roll data back. A verified restore and a compatibility plan are separate requirements. The website work discussed here deliberately kept those backend paths out of scope.
+
+The final note can stay short: accepted source, built artifact, observed runtime, public check and known rollback. Its value comes from those links being real, not from adding another green badge to the pipeline.
+
+References: [Docker image inspection](https://docs.docker.com/reference/cli/docker/image/inspect/), [Docker build context](https://docs.docker.com/build/concepts/context/).

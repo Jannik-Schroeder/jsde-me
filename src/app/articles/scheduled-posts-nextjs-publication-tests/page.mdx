@@ -1,0 +1,47 @@
+import { articleMetadata } from '@/lib/article-metadata'
+import { ArticleLayout } from '@/components/ArticleLayout'
+
+export const article = {
+  "author": "Jannik Schröder",
+  "date": "2026-11-22",
+  "title": "Scheduled Articles in Next.js: Testing What Is Public Before the Date",
+  "description": "Test direct routes, metadata, lists and sitemaps together, including Berlin calendar dates and an isolated future-clock preview."
+}
+
+export async function generateMetadata() {
+  return articleMetadata(article, 'https://jsde.me/articles/scheduled-posts-nextjs-publication-tests')
+}
+
+export default (props) => <ArticleLayout article={article} {...props} />
+
+A date on an article is not a publication control. The direct URL can still render, metadata can still reveal the title, and a sitemap can still advertise a page that the index hides.
+
+The scheduled-content work on these sites made the acceptance condition more explicit: before the date, the content should not be public through any of those paths. After the date, the same deployment must make it available without a manual rebuild.
+
+## Use one publication decision
+
+The list, direct page, metadata and sitemap should consult the same policy. A separate comparison in each place makes it easy to fix one route while leaving another open.
+
+For date-only content, the relevant question is whether that calendar day has arrived in Europe/Berlin. It is not simply whether the server's UTC date matches the string. Around midnight, those answers differ. The autumn daylight-saving transition is a useful boundary to test.
+
+Malformed dates should not become accidentally public. A strict format check is only the first part: a value such as 30 February has the right shape but is not a valid day.
+
+## Account for the build boundary
+
+A correct comparison can still be evaluated at the wrong time. If a route is prerendered once and never re-evaluated, tomorrow's article may stay absent until another build. A publication mechanism needs an explicit freshness strategy.
+
+The implementations here use their application's existing rendering model. Request-time rendering is one option; correctly bounded revalidation is another. The claim to test is the visible behavior over time, rather than a particular configuration word copied from another version of Next.js.
+
+## Test a real direct request
+
+The important pre-release checks are straightforward: the direct URL returns an actual 404, its response does not expose the future title or body, and the URL is absent from both the list and sitemap. Also inspect client assets: moving the complete content into a browser bundle would undermine the route gate.
+
+After the boundary, check HTTP 200, the expected heading, canonical and sitemap entry. An unknown slug should stay unavailable in both cases.
+
+## Change a test clock, not the production clock
+
+An isolated preview can run with a controlled date while the host and production stay untouched. The browser needs a consistent clock when client-rendered elements include dates; otherwise the test can create a hydration mismatch of its own.
+
+In the October implementation, policy tests were supplemented by real HTTP checks against before-and-after previews. That distinction matters: a helper test cannot prove that the page actually calls the helper. The useful result is a small set of externally visible guarantees that survives the next framework upgrade.
+
+References: [Next.js request-time rendering](https://nextjs.org/docs/app/api-reference/functions/connection), [Google sitemap guidance](https://developers.google.com/search/docs/crawling-indexing/sitemaps/overview).

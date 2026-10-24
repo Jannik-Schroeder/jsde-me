@@ -1,3 +1,4 @@
+import { articleMetadata } from '@/lib/article-metadata'
 import { ArticleLayout } from '@/components/ArticleLayout'
 
 export const article = {
@@ -8,10 +9,8 @@ export const article = {
         "My firewall's disk filled itself with 188 GB of firewall logs in a single day - and the GUI died with it. What followed was a deep dive through ARP tables, switch FDBs, and LACP hashing, ending at a subtle interaction between CARP virtual MACs and MLAG that turned my HA firewall pair into two firewalls routing the same packets in parallel.",
 }
 
-export const metadata = {
-  alternates: { canonical: 'https://jsde.me/articles/carp-mlag-unicast-flooding' },
-    title: article.title,
-    description: article.description,
+export async function generateMetadata() {
+  return articleMetadata(article, 'https://jsde.me/articles/carp-mlag-unicast-flooding')
 }
 
 export default (props) => <ArticleLayout article={article} {...props} />

@@ -1,0 +1,52 @@
+import { articleMetadata } from '@/lib/article-metadata'
+import { ArticleLayout } from '@/components/ArticleLayout'
+
+export const article = {
+  "author": "Jannik Schröder",
+  "date": "2026-12-06",
+  "title": "Why I Test IPv4 and IPv6 Separately Before Calling a Deployment Done",
+  "description": "A deployment acceptance check that distinguishes DNS, TLS and HTTP results on each address family."
+}
+
+export async function generateMetadata() {
+  return articleMetadata(article, 'https://jsde.me/articles/dual-stack-deployment-checks')
+}
+
+export default (props) => <ArticleLayout article={article} {...props} />
+
+A successful browser visit is a useful observation. It is incomplete evidence for a dual-stack deployment because it does not necessarily tell you which address family succeeded.
+
+The October website checks used explicit IPv4 and IPv6 requests from an external host. The aim was to describe what had actually been tested, including the cases where a domain did not advertise an IPv6 address at all.
+
+## Start with the address records
+
+An A record and an AAAA record describe different endpoints. Confirm both against the intended public service. A correct IPv4 address does not compensate for an old IPv6 target that still serves another configuration.
+
+Also check the test host itself. A machine without working IPv6 cannot establish that the destination's IPv6 service is broken. A missing AAAA record is a different result from an advertised address that cannot serve the application.
+
+## Keep the hostname during the TLS test
+
+The request should use the real hostname so that certificate validation and virtual-host selection are exercised. Testing a raw address can bypass the very mismatch that affects a visitor.
+
+For a site you control, a small starting point is:
+
+```bash
+curl -4 -I https://www.example.com/
+curl -6 -I https://www.example.com/
+```
+
+Do not suppress certificate errors just to obtain a status code. Record the failure and investigate the name, trust chain or endpoint instead. Follow redirects deliberately and check where each address family ends up.
+
+## A small successful response is still a small test
+
+Add a normal content page and a representative larger response when the service needs them. Paths that work for a header-sized exchange can behave differently during a longer transfer. IPv6 path-MTU handling and required ICMPv6 messages deserve investigation when the symptom fits; a broad firewall change is not a diagnosis.
+
+An HTTP 200 response also needs to be the right content. Compare a harmless expected marker or page title, not just the code. Different address families can accidentally reach different releases.
+
+## Write the scope next to the result
+
+The recorded website check passed the advertised paths it exercised. It did not prove every geographic route, every client, failover behavior or a guaranteed latency. The source, time, address family and requested URL make the observation usable later.
+
+That is the pattern worth keeping: a deployment acceptance note should say which public endpoint was reached and what was verified there. When a later visitor reports a fault, the note provides a starting point rather than an overly broad claim that everything was tested.
+
+References: [IPv6 specification](https://www.rfc-editor.org/rfc/rfc8200), [ICMPv6 filtering recommendations](https://www.rfc-editor.org/rfc/rfc4890).

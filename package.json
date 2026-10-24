@@ -1,6 +1,6 @@
 {
   "name": "jsde-me",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "private": true,
   "scripts": {
     "predev": "node scripts/generate-articles.mjs",
@@ -9,7 +9,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:publication": "node tests/publication-http.mjs"
   },
   "browserslist": "defaults, not ie <= 11",
   "dependencies": {

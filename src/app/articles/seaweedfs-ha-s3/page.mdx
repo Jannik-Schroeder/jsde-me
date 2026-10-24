@@ -1,3 +1,4 @@
+import { articleMetadata } from '@/lib/article-metadata'
 import { ArticleLayout } from '@/components/ArticleLayout'
 
 export const article = {
@@ -8,10 +9,8 @@ export const article = {
         "Building a highly available, self-hosted S3 service on two NAS boxes and a tiny arbiter VM with SeaweedFS - why I chose it over the alternatives, how the Raft-based architecture works, and the operational limits and pitfalls I learned the hard way.",
 }
 
-export const metadata = {
-  alternates: { canonical: 'https://jsde.me/articles/seaweedfs-ha-s3' },
-    title: article.title,
-    description: article.description,
+export async function generateMetadata() {
+  return articleMetadata(article, 'https://jsde.me/articles/seaweedfs-ha-s3')
 }
 
 export default (props) => <ArticleLayout article={article} {...props} />

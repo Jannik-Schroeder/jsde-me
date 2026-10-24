@@ -6,10 +6,24 @@ import type { ArticleMeta } from './articles'
 
 export const generatedArticles: ArticleMeta[] = [
   {
+    slug: "git-to-running-container-proof",
+    title: "From a Git Commit to the Running Container: Proving What Was Deployed",
+    date: "2026-12-27",
+    description: "Connect source revision, build context, image identity and runtime evidence without treating a mutable tag as proof.",
+    author: "Jannik Schröder",
+  },
+  {
     slug: "plexamp-hifi-endpoint",
     title: "Building a Dedicated HiFi Endpoint with Plexamp",
     date: "2026-12-13",
     description: "How I turned a headless Linux box into a single streaming endpoint for my vintage amplifier - Plexamp headless, AirPlay 2, and Spotify Connect all feeding one USB DAC through PipeWire, with automatic source switching and a self-healing fix for a flaky USB connection.",
+    author: "Jannik Schröder",
+  },
+  {
+    slug: "dual-stack-deployment-checks",
+    title: "Why I Test IPv4 and IPv6 Separately Before Calling a Deployment Done",
+    date: "2026-12-06",
+    description: "A deployment acceptance check that distinguishes DNS, TLS and HTTP results on each address family.",
     author: "Jannik Schröder",
   },
   {
@@ -20,6 +34,13 @@ export const generatedArticles: ArticleMeta[] = [
     author: "Jannik Schröder",
   },
   {
+    slug: "scheduled-posts-nextjs-publication-tests",
+    title: "Scheduled Articles in Next.js: Testing What Is Public Before the Date",
+    date: "2026-11-22",
+    description: "Test direct routes, metadata, lists and sitemaps together, including Berlin calendar dates and an isolated future-clock preview.",
+    author: "Jannik Schröder",
+  },
+  {
     slug: "stalwart-mail-dmz",
     title: "Self-Hosted Mail with Stalwart in a DMZ",
     date: "2026-11-15",
@@ -27,10 +48,17 @@ export const generatedArticles: ArticleMeta[] = [
     author: "Jannik Schröder",
   },
   {
+    slug: "missing-data-is-not-zero-traffic",
+    title: "A Read-Only Website Report That Separates Missing Data from Zero Traffic",
+    date: "2026-11-08",
+    description: "How the website report handles new tracking, unavailable data, evidence-backed suggestions and a separate delivery step.",
+    author: "Jannik Schröder",
+  },
+  {
     slug: "homelab-alerting-ntfy",
-    title: "Alerting That Doesn't Cry Wolf: LibreNMS + ntfy + LTE-SMS Failover",
+    title: "Lessons from a Retired Alerting Stack: LibreNMS, ntfy and SMS",
     date: "2026-11-01",
-    description: "How I rebuilt my homelab alerting around self-hosted ntfy for push notifications, kept an LTE SMS path via a Teltonika RUT200 as a true last resort, and learned the hard way why escalation rules need narrow scopes and generous delays.",
+    description: "A historical account of the LibreNMS and ntfy alerting setup, the limits of an SMS fallback, and the lessons carried into the later Checkmk migration.",
     author: "Jannik Schröder",
   },
   {

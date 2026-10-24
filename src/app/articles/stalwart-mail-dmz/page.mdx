@@ -1,3 +1,4 @@
+import { articleMetadata } from '@/lib/article-metadata'
 import { ArticleLayout } from '@/components/ArticleLayout'
 
 export const article = {
@@ -8,13 +9,13 @@ export const article = {
         "Running my own mail server with Stalwart - why I self-host mail despite everyone saying not to, how I moved the mail VM from the trusted LAN into a proper DMZ, and the day my own auto-ban system locked out my reverse proxy.",
 }
 
-export const metadata = {
-  alternates: { canonical: 'https://jsde.me/articles/stalwart-mail-dmz' },
-    title: article.title,
-    description: article.description,
+export async function generateMetadata() {
+  return articleMetadata(article, 'https://jsde.me/articles/stalwart-mail-dmz')
 }
 
 export default (props) => <ArticleLayout article={article} {...props} />
+
+> This article documents a particular setup and its recorded tests. Addresses in configuration examples use documentation ranges and are not live endpoints. Commands and operational schedules must be checked against your own current environment.
 
 ## Introduction
 
@@ -75,7 +76,7 @@ My compromise: **unauthenticated relay on port 25, but only from explicitly list
 # Relay decision: internal subnets may relay without auth
 [session.rcpt]
 relay = [ { if = "!is_empty(authenticated_as)", then = true },
-          { if = "remote_ip in { '10.10.0.0/24', '10.20.0.0/24', '10.60.0.0/24' }", then = true },
+          { if = "remote_ip in { '192.0.2.0/24', '198.51.100.0/24', '203.0.113.0/24' }", then = true },
           { else = false } ]
 ```
 
@@ -84,7 +85,7 @@ One real-world wrinkle: appliances are sloppy SMTP citizens. My NAS greets the s
 ```toml
 # Require FQDN in EHLO - except for internal appliances
 [session.ehlo]
-reject-non-fqdn = [ { if = "remote_ip in { '10.10.0.0/24', '10.20.0.0/24' }", then = false },
+reject-non-fqdn = [ { if = "remote_ip in { '192.0.2.0/24', '198.51.100.0/24' }", then = false },
                     { else = true } ]
 ```
 
@@ -111,7 +112,7 @@ The infuriating detail: I *had* an exception for exactly this. Stalwart maintain
 ```toml
 # Infrastructure that must NEVER be auto-banned
 [server]
-allowed-ip = [ "10.60.0.101" ]   # reverse proxy - UPDATE THIS WHEN THE PROXY MOVES
+allowed-ip = [ "203.0.113.101" ]   # reverse proxy - UPDATE THIS WHEN THE PROXY MOVES
 ```
 
 The lessons, in order of importance:

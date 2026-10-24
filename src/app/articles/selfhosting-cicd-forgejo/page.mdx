@@ -1,3 +1,4 @@
+import { articleMetadata } from '@/lib/article-metadata'
 import { ArticleLayout } from '@/components/ArticleLayout'
 
 export const article = {
@@ -8,10 +9,8 @@ export const article = {
         "How I moved ~70 repositories off GitHub and built a fully self-hosted software supply chain: Forgejo for git, Woodpecker for CI, Harbor as the registry, and Komodo for deployments - including the auto-deploy loop and the pitfalls that cost me the most time.",
 }
 
-export const metadata = {
-  alternates: { canonical: 'https://jsde.me/articles/selfhosting-cicd-forgejo' },
-    title: article.title,
-    description: article.description,
+export async function generateMetadata() {
+  return articleMetadata(article, 'https://jsde.me/articles/selfhosting-cicd-forgejo')
 }
 
 export default (props) => <ArticleLayout article={article} {...props} />

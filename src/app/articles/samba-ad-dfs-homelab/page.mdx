@@ -1,3 +1,4 @@
+import { articleMetadata } from '@/lib/article-metadata'
 import { ArticleLayout } from '@/components/ArticleLayout'
 
 export const article = {
@@ -8,10 +9,8 @@ export const article = {
         "Why I built a real Active Directory at home with Samba as the domain controller - central authentication for the whole family, a DFS namespace spanning two NAS boxes, and the lessons learned about DNS, VLANs, and msdfs along the way.",
 }
 
-export const metadata = {
-  alternates: { canonical: 'https://jsde.me/articles/samba-ad-dfs-homelab' },
-    title: article.title,
-    description: article.description,
+export async function generateMetadata() {
+  return articleMetadata(article, 'https://jsde.me/articles/samba-ad-dfs-homelab')
 }
 
 export default (props) => <ArticleLayout article={article} {...props} />

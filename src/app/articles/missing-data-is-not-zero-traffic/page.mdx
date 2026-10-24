@@ -1,0 +1,49 @@
+import { articleMetadata } from '@/lib/article-metadata'
+import { ArticleLayout } from '@/components/ArticleLayout'
+
+export const article = {
+  "author": "Jannik Schröder",
+  "date": "2026-11-08",
+  "title": "A Read-Only Website Report That Separates Missing Data from Zero Traffic",
+  "description": "How the website report handles new tracking, unavailable data, evidence-backed suggestions and a separate delivery step."
+}
+
+export async function generateMetadata() {
+  return articleMetadata(article, 'https://jsde.me/articles/missing-data-is-not-zero-traffic')
+}
+
+export default (props) => <ArticleLayout article={article} {...props} />
+
+The first version of a website report has an awkward problem: it wants to show a trend before enough days have been measured. A chart can look authoritative even when the comparison contains time before tracking existed.
+
+The implementation reviewed here was built in October 2026. Its useful feature is the way it keeps incomplete evidence visible rather than turning every missing result into a number.
+
+## Define the first complete day
+
+A site created halfway through a day does not have a complete measurement for that day. The report records the site's creation time, interprets the calendar in Europe/Berlin and identifies the first full measurement day.
+
+The same rule applies to comparison periods. A seven-day total can contain a partial tracking period. That does not make it a valid seven-day baseline, and a same-weekday comparison cannot use a day before tracking existed.
+
+A simple example makes the distinction clear. If tracking began this afternoon, yesterday's missing page views are not a measured zero. If a previous measured period really contained zero, a later positive count still has no meaningful percentage change with zero as the denominator.
+
+## Keep collection outside the model's prose
+
+The report's model calls bounded collection tools. The tools obtain the configured sites' analytics and public website checks; the model is not handed a general shell or credentials.
+
+Recommendations must refer to a fact identifier for the same domain. The renderer takes the observation text from the evidence instead of trusting the model to restate a number. This does not make every recommendation correct. It narrows the part of the output that can pretend to be a measurement.
+
+A failed API request remains a data gap. An empty successful response remains distinguishable from a failed response. Neither is automatically evidence of lost visitors.
+
+## Delivery is another stateful operation
+
+Building a PDF and sending it are separate steps. The sender verifies the expected date and file hash, records a dispatch attempt and then calls the messaging API.
+
+A timeout after dispatch is ambiguous: the recipient may already have the document. Repeating the request blindly can create duplicates. The reviewed implementation records that uncertainty and requires a check before a resend.
+
+## The most useful tests describe a false conclusion
+
+Tests cover incomplete history, a zero denominator, cross-domain evidence, a changed PDF and an ambiguous earlier delivery. These cases are more useful than asserting that a helper returns the value it was coded to return.
+
+The report also has limits: a bounded crawl is not a full technical audit, and stored Google index data is not a live page test. A useful daily summary states those limits next to the result. Its job is to point at a better next action, not to invent certainty on a quiet day.
+
+References: [Search Console inspection semantics](https://developers.google.com/webmaster-tools/v1/urlInspection.index/inspect), [HTTP semantics](https://www.rfc-editor.org/rfc/rfc9110).
