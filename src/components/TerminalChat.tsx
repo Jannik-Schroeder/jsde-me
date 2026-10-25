@@ -1,5 +1,7 @@
 'use client'
 
+import { linkEvent } from '@/lib/link-events'
+
 import Link from 'next/link'
 import {
   useEffect,
@@ -135,7 +137,7 @@ function AgentLink({
   if (href.startsWith('http')) {
     return (
       <a
-        href={href}
+        href={href} {...linkEvent(href)}
         target="_blank"
         rel="noopener noreferrer"
         className="link text-fg"
@@ -147,13 +149,13 @@ function AgentLink({
   }
   if (href.startsWith('mailto:')) {
     return (
-      <a href={href} className="link text-fg">
+      <a href={href} {...linkEvent(href)} className="link text-fg">
         {children}
       </a>
     )
   }
   return (
-    <Link href={href} className="link text-fg">
+    <Link href={href} {...linkEvent(href)} className="link text-fg">
       {children}
     </Link>
   )
@@ -254,7 +256,7 @@ function CommandOutput({
       <div className="space-y-1">
         <p className="text-fg">{me.name}</p>
         <p>
-          <a href={`mailto:${me.email}`} className="link text-fg">
+          <a href={`mailto:${me.email}`} {...linkEvent(`mailto:${me.email}`)} className="link text-fg">
             {me.email}
           </a>
         </p>
@@ -262,7 +264,7 @@ function CommandOutput({
           (link) => (
             <p key={link.href}>
               <a
-                href={link.href}
+                href={link.href} {...linkEvent(link.href)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="link-draw hover:text-fg motion-safe:transition-colors"

@@ -1,3 +1,4 @@
+import { linkEvent } from '@/lib/link-events'
 import { me, projectsUrl } from '@/lib/me'
 
 /** Order of the quiet link row; phanes.net leads because it is the one action,
@@ -42,6 +43,7 @@ export function SiteHeader() {
               )}
               <a
                 href={link.href}
+                {...linkEvent(link.href)}
                 className="hover:text-fg group inline-flex items-baseline gap-1 motion-safe:transition-colors"
               >
                 <span className="link-draw group-hover:bg-[length:100%_1px]">

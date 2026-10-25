@@ -63,7 +63,7 @@ export default function RootLayout({
     >
       <body className="bg-bg text-fg min-h-full font-sans">{children}
         <footer className="border-border text-fg-dim mx-auto max-w-[70ch] border-t px-4 py-6 text-xs leading-relaxed">
-          <p>Self-hosted, cookieless page-view analytics.{' '}
+          <p>Self-hosted, cookieless page-view and public link-click analytics. Analytics do not record message contents.{' '}
             <a href="https://scpx.de/datenschutz" className="link underline underline-offset-4">Analytics privacy information</a>
           </p>
         </footer>
