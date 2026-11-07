@@ -66,6 +66,7 @@ export default function RootLayout({
           <p>Self-hosted, cookieless page-view and public link-click analytics. Analytics do not record message contents.{' '}
             <a href="https://scpx.de/datenschutz" className="link underline underline-offset-4">Analytics privacy information</a>
           </p>
+          <p className="mt-2">VAT ID / USt-IdNr.: DE466225341 · <a href="https://scpx.de/impressum" className="link underline underline-offset-4">Legal notice / Impressum</a></p>
         </footer>
         <Script
           src="https://rybbit.scpx.de/api/script.js"
