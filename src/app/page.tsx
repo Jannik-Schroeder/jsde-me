@@ -1,24 +1,29 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { connection } from 'next/server'
+import { cache } from 'react'
 import { RackViewer } from '@/components/RackViewer'
 import { StatusLine } from '@/components/StatusLine'
-import { LabScene } from '@/components/LabScene'
-import { LabClockStrip } from '@/components/LabClockStrip'
+import { AwakeHero } from '@/components/AwakeHero'
 import { ArticleArchive } from '@/components/archive/ArticleArchive'
 import { getArticleTopics } from '@/components/archive/topics'
 import { CareerRail } from '@/components/CareerRail'
 import { NotesTicker } from '@/components/NotesTicker'
 import { getAllArticles } from '@/lib/articles'
-import { me } from '@/lib/me'
+import { me, stravaUrl } from '@/lib/me'
 
 export const metadata: Metadata = {
   alternates: { canonical: 'https://jsde.me/' },
   description: me.short,
 }
 
-export default async function Home() {
+const getRequestTime = cache(async () => {
   await connection()
+  return Date.now()
+})
+
+export default async function Home() {
+  const initialTime = await getRequestTime()
   const articles = getAllArticles()
   const notes = articles.map(({ slug, title, date, description }) => ({
     slug,
@@ -29,42 +34,24 @@ export default async function Home() {
   }))
   return (
     <main>
-      <section className="hero" aria-labelledby="home-title">
-        <div className="hub-wrap">
-          <div className="hero-main">
-            <h1 id="home-title">
-              Do I host
-              <br />
-              this site
-              <br />
-              myself?
-            </h1>
-            <p className="hero-answer">Yep.</p>
-            <div className="hero-vignette">
-              <LabScene />
-            </div>
-          </div>
-          <p className="hero-intro">
-            I’m <Link href="/profile">Jannik Schröder</Link>, a sysadmin in
-            Paderborn. Here’s what I run in my <Link href="/uses">homelab</Link>
-            .
-          </p>
-          <div className="hero-actions">
-            <Link className="primary-action" href="/articles">
-              Read the field notes <b aria-hidden="true">→</b>
-            </Link>
-            <Link className="paper-link" href="/profile#career">
-              Career timeline <b aria-hidden="true">→</b>
-            </Link>
-          </div>
-          <div className="hero-stats">
-            <LabClockStrip
-              publishedCount={articles.length}
-              publishedDates={notes.map((note) => note.date)}
-            />
-          </div>
+      <AwakeHero
+        initialTime={initialTime}
+        publishedDates={notes.map((note) => note.date)}
+      >
+        <p className="hero-intro">
+          I’m a sysadmin in Paderborn. I write about my{' '}
+          <Link href="/uses">homelab</Link> here and log my training on{' '}
+          <a href={stravaUrl}>Strava</a>.
+        </p>
+        <div className="hero-actions">
+          <Link className="primary-action" href="/articles">
+            Read the field notes <b aria-hidden="true">→</b>
+          </Link>
+          <Link className="paper-link" href="/profile#career">
+            Career timeline <b aria-hidden="true">→</b>
+          </Link>
         </div>
-      </section>
+      </AwakeHero>
       <NotesTicker
         articles={notes.slice(0, 4).map(({ slug, title }) => ({ slug, title }))}
       />

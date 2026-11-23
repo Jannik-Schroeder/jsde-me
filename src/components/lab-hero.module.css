@@ -515,11 +515,7 @@
   border-color: #282e36;
 }
 
-.activity[data-pending='true'] {
-  visibility: hidden;
-}
-
-@media (max-width: 36rem) {
+@media (max-width: 42rem) {
   .stats {
     grid-template-columns: minmax(0, max-content) minmax(0, max-content);
     align-items: start;
