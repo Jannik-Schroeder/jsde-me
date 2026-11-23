@@ -60,10 +60,9 @@
   text-transform: uppercase;
 }
 .brand img {
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
   object-fit: cover;
-  image-rendering: pixelated;
 }
 .hub-nav {
   display: flex;

@@ -84,7 +84,7 @@ export function SiteHeader() {
           onClick={close}
           aria-label="jsde.me home"
         >
-          <Image src={avatar} width={24} height={24} alt="" sizes="24px" />
+          <Image src={avatar} width={28} height={28} alt="" />
           jsde.me
         </Link>
         <nav id="site-nav" className="hub-nav" aria-label="Main navigation">
