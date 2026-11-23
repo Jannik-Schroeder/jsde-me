@@ -1,4 +1,5 @@
 .page {
+  --career-accent: #a72e36;
   padding-block: clamp(3.25rem, 7vw, 7rem);
 }
 
@@ -17,26 +18,28 @@
 .careerLink,
 .yearAxis,
 .labNote a {
-  font-family: var(--font-mono);
+  font-family: var(--font-label, var(--font-mono));
   font-size: 0.75rem;
 }
 
 .location {
   margin-block-end: 1rem;
-  color: #c2fa55;
+  color: var(--career-accent);
 }
 
 .intro h1,
 .section h2 {
   font-family: var(--font-display, var(--font-sans));
-  font-weight: 800;
-  letter-spacing: -0.045em;
+  font-weight: 400;
+  letter-spacing: 0.076em;
+  text-shadow: var(--pixel-ink);
+  text-transform: uppercase;
   line-height: 0.9;
 }
 
 .intro h1 {
   margin-block-end: 1.4rem;
-  font-size: clamp(4rem, 9.4vw, 8.5rem);
+  font-size: clamp(2.4rem, 6.5vw, 5.5rem);
   overflow-wrap: anywhere;
 }
 
@@ -76,12 +79,12 @@
 .projects span,
 .careerLink span,
 .labNote span {
-  color: #c2fa55;
+  color: var(--career-accent);
 }
 
 .careerLink {
   margin-block-start: 1.2rem;
-  color: #c2fa55;
+  color: var(--career-accent);
 }
 
 .portrait {
@@ -100,16 +103,16 @@
 
 .section {
   display: grid;
-  grid-template-columns: minmax(0, 15rem) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 18rem) minmax(0, 1fr);
   gap: clamp(1.25rem, 4vw, 4rem);
   margin-block-start: 3.5rem;
-  border-block-start: 1px solid var(--color-border);
-  padding-block-start: 1.25rem;
+  border-block-start: 1px dashed #8e989e;
+  padding-block-start: 1.65rem;
   scroll-margin-block-start: 5.5rem;
 }
 
 .section h2 {
-  font-size: clamp(2rem, 4.6vw, 3.7rem);
+  font-size: clamp(1.35rem, 2.4vw, 2rem);
 }
 
 .careerIntro {
@@ -169,11 +172,11 @@
 }
 
 .roles .independent .role {
-  border-inline-start: 3px solid #c2fa55;
+  border-inline-start: 3px solid var(--career-accent);
 }
 
 .roles .independent h3 {
-  color: #c2fa55;
+  color: var(--career-accent);
   font-size: 1.3rem;
 }
 
@@ -192,7 +195,7 @@
 }
 
 .track .ongoing {
-  background: #c2fa55;
+  background: var(--career-accent);
 }
 
 .roles h3,
@@ -249,7 +252,7 @@
 .labNote {
   max-width: 54ch;
   margin-block-start: 3.5rem;
-  border-inline-start: 2px solid #c2fa55;
+  border-inline-start: 2px solid var(--career-accent);
   padding-inline-start: 1.15rem;
 }
 
@@ -310,4 +313,44 @@
     border-inline-start: 0;
     border-block-start: 1px solid var(--color-border);
   }
+}
+
+.portrait {
+  position: relative;
+  isolation: isolate;
+  border-color: #121314;
+  box-shadow: 0.45rem 0.45rem 0 #c9d0d6;
+}
+
+.portrait::after {
+  position: absolute;
+  display: block;
+  width: 2.25rem;
+  height: 0.45rem;
+  right: 1rem;
+  bottom: -0.225rem;
+  background: #eb4b4b;
+  content: '';
+}
+
+.independent {
+  background: #f0dcdd;
+}
+
+.roles .independent .role {
+  border-inline-start-color: #eb4b4b;
+}
+
+.track .ongoing {
+  background: #a72e36;
+}
+
+.roles .independent .ongoing {
+  background: #eb4b4b;
+}
+
+.labNote {
+  padding-block: 0.85rem;
+  padding-inline-end: 1rem;
+  background: #dfe5e9;
 }

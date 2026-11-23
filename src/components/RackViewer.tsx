@@ -41,19 +41,8 @@ export function RackViewer() {
           alt={shot.alt}
           fill
           sizes="(max-width: 700px) 100vw, 56vw"
-          loading={index === 0 ? 'eager' : undefined}
-          fetchPriority={index === 0 ? 'high' : 'auto'}
           style={{ objectPosition: shot.position }}
         />
-        <div aria-hidden="true" className="viewfinder">
-          <i />
-          <i />
-          <i />
-          <i />
-        </div>
-        <span className="archive-label">
-          <span aria-hidden="true">▧</span> RACK ARCHIVE
-        </span>
       </div>
       <figcaption>
         <span aria-live="polite">

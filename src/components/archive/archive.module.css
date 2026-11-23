@@ -3,16 +3,19 @@
 }
 
 .archiveHeader {
+  position: relative;
   padding-block-end: clamp(2rem, 5vw, 3.75rem);
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px dashed #8d969f;
 }
 
 .display {
   font-family: var(--font-display, var(--font-sans));
-  font-weight: 800;
-  font-size: clamp(4.5rem, 12.5vw, 10rem);
+  font-weight: 400;
+  font-size: clamp(2.55rem, 9vw, 6.3rem);
   line-height: 0.83;
-  letter-spacing: -0.035em;
+  letter-spacing: 0.076em;
+  text-shadow: var(--pixel-ink);
+  text-wrap: balance;
   text-transform: uppercase;
 }
 
@@ -28,7 +31,9 @@
   display: grid;
   gap: 1.5rem 2rem;
   padding-block: 1.5rem;
+  padding-inline: clamp(0.8rem, 2vw, 1.5rem);
   border-bottom: 1px solid var(--color-border);
+  background: #e1e6eb;
 }
 
 .search,
@@ -42,7 +47,7 @@
 .row time,
 .topics,
 .readingMeta {
-  font-family: var(--font-mono);
+  font-family: var(--font-label, var(--font-mono));
   font-size: 0.75rem;
   color: var(--color-fg-dim);
 }
@@ -58,8 +63,8 @@
   width: 100%;
   min-height: 2.75rem;
   padding: 0.6rem 0.75rem;
-  border: 1px solid var(--color-border);
-  background: var(--color-bg-elev);
+  border: 1px solid #89939d;
+  background: #f3f5f7;
   color: var(--color-fg);
   font-size: 0.875rem;
 }
@@ -78,26 +83,27 @@
 .filterButtons button {
   min-height: 2.75rem;
   padding: 0.5rem 0.75rem;
-  border: 1px solid var(--color-border);
+  border: 1px solid #9ca6af;
   color: var(--color-fg-dim);
   font-size: 0.8rem;
   cursor: pointer;
 }
 
-.filterButtons button:hover {
+.filterButtons button:hover:not([aria-pressed='true']) {
   color: var(--color-fg);
   border-color: var(--color-fg-dim);
+  background-color: #f4f6f7;
 }
 
 .filterButtons button[aria-pressed='true'] {
-  background: #c2fa55;
-  border-color: #c2fa55;
-  color: #111708;
+  background: #121314;
+  border-color: #fff;
+  color: #fff;
 }
 
 .archive :where(a, button, input):focus-visible,
 .reading a:focus-visible {
-  outline: 2px solid #c2fa55;
+  outline: 2px solid #a72e36;
   outline-offset: 3px;
 }
 
@@ -111,7 +117,7 @@
 
 .reset {
   min-height: 2.75rem;
-  color: #c2fa55;
+  color: #a72e36;
   font-size: 0.8rem;
   text-decoration: underline;
   text-underline-offset: 0.25em;
@@ -125,18 +131,31 @@
 .year > h2,
 .empty h2 {
   margin-bottom: 0.75rem;
-  color: #c2fa55;
+  color: #a72e36;
   font-family: var(--font-display, var(--font-sans));
-  font-size: clamp(2rem, 4vw, 3.5rem);
-  font-weight: 750;
+  font-size: clamp(1.65rem, 3.2vw, 2.85rem);
+  font-weight: 400;
   line-height: 1;
+}
+
+.year > h2 {
+  width: fit-content;
+  padding-inline-start: 0.65rem;
+  border-inline-start: 0.2rem solid #eb4b4b;
+  color: #121314;
 }
 
 .row {
   display: grid;
   gap: 0.5rem 1.25rem;
   padding-block: 1.3rem;
+  padding-inline: 0.7rem;
   border-top: 1px solid var(--color-border);
+}
+
+.row:hover,
+.row:focus-within {
+  background-color: #e1e6eb;
 }
 
 .row:last-child {
@@ -157,7 +176,7 @@
 
 .row a:hover,
 .readingLink:hover {
-  color: #c2fa55;
+  color: #a72e36;
   text-decoration: underline;
   text-underline-offset: 0.2em;
 }
@@ -186,16 +205,18 @@
 }
 
 .readingHeader {
+  position: relative;
   padding-block: 2.5rem 1.75rem;
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px dashed #8d969f;
 }
 
 .readingHeader h1 {
   font-family: var(--font-display, var(--font-sans));
-  font-size: clamp(2.7rem, 7vw, 5.25rem);
-  font-weight: 780;
+  font-size: clamp(2rem, 4.4vw, 4rem);
+  font-weight: 400;
   line-height: 0.95;
-  letter-spacing: -0.025em;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
   overflow-wrap: anywhere;
 }
 
@@ -205,7 +226,7 @@
 
 .readingLink {
   color: var(--color-fg-dim);
-  font-family: var(--font-mono);
+  font-family: var(--font-label, var(--font-mono));
   font-size: 0.8rem;
 }
 
@@ -230,5 +251,134 @@
 
   .topics {
     grid-column: auto;
+  }
+}
+
+.archiveHeader::after,
+.readingHeader::after {
+  display: block;
+  position: absolute;
+  inset: auto auto -1px 0;
+  width: 3rem;
+  height: 0.2rem;
+  background-color: #eb4b4b;
+  content: '';
+}
+
+.reading :global(.prose-jsde) {
+  --tw-prose-body: #31373d;
+  --tw-prose-headings: #121314;
+  --tw-prose-lead: #31373d;
+  --tw-prose-links: #8b2932;
+  --tw-prose-bold: #121314;
+  --tw-prose-counters: #49535d;
+  --tw-prose-bullets: #49535d;
+  --tw-prose-hr: #adb6bf;
+  --tw-prose-quotes: #31373d;
+  --tw-prose-quote-borders: #adb6bf;
+  --tw-prose-captions: #49535d;
+  --tw-prose-code: #121314;
+  --tw-prose-pre-code: #121314;
+  --tw-prose-pre-bg: #f4f6f7;
+  --tw-prose-th-borders: #7e8a95;
+  --tw-prose-td-borders: #aab3bd;
+}
+
+.reading :global(.prose-jsde a) {
+  text-decoration-color: currentColor;
+}
+
+.reading :global(.prose-jsde pre) {
+  border-color: #aab3bd;
+  border-radius: 0;
+  background-color: var(--tw-prose-pre-bg);
+}
+
+.reading :global(.prose-jsde :not(pre) > code) {
+  border-radius: 0;
+  background: #e1e6eb;
+}
+
+.previewGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: clamp(2rem, 6vw, 6rem);
+  row-gap: clamp(1rem, 3vw, 2.75rem);
+  margin-block-end: 1.75rem;
+  padding-block-start: 0.65rem;
+}
+
+.previewEntry {
+  --cross: #a72e36;
+  position: relative;
+  min-width: 0;
+  padding-inline-start: 1.3rem;
+}
+
+.previewEntry:nth-child(3n + 2) {
+  --cross: #335bad;
+}
+
+.previewEntry:nth-child(3n) {
+  --cross: #665494;
+}
+
+.previewEntry::before {
+  position: absolute;
+  inset: 0.45rem auto auto 0;
+  width: 0.67rem;
+  height: 0.67rem;
+  background: var(--cross);
+  clip-path: polygon(
+    33% 0,
+    67% 0,
+    67% 33%,
+    100% 33%,
+    100% 67%,
+    67% 67%,
+    67% 100%,
+    33% 100%,
+    33% 67%,
+    0 67%,
+    0 33%,
+    33% 33%
+  );
+  content: '';
+}
+
+.previewEntry h3 {
+  font-family: var(--font-display, var(--font-sans));
+  font-size: clamp(1.15rem, 2.6vw, 1.95rem);
+  font-weight: 400;
+  line-height: 1.22;
+  letter-spacing: 0.035em;
+  overflow-wrap: anywhere;
+}
+
+.previewEntry a:hover {
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.previewEntry p {
+  max-width: 53ch;
+  margin-block-start: 0.55rem;
+  color: var(--color-fg-dim);
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+
+.previewEntry time {
+  display: block;
+  margin-block-start: 0.45rem;
+  font-family: var(--font-label, var(--font-mono));
+  font-size: 0.7rem;
+  color: var(--color-fg-dim);
+}
+
+@media (max-width: 43rem) {
+  .previewGrid {
+    grid-template-columns: 1fr;
+    row-gap: 1.45rem;
   }
 }

@@ -10,7 +10,13 @@ import styles from './archive.module.css'
 
 type ArchiveArticle = Omit<ArticleMeta, 'author'> & { topics: string[] }
 
-export function ArticleArchive({ articles }: { articles: ArchiveArticle[] }) {
+export function ArticleArchive({
+  articles,
+  preview = false,
+}: {
+  articles: ArchiveArticle[]
+  preview?: boolean
+}) {
   const [query, setQuery] = useState('')
   const [topic, setTopic] = useState('')
   const searchInput = useRef<HTMLInputElement>(null)
@@ -31,15 +37,26 @@ export function ArticleArchive({ articles }: { articles: ArchiveArticle[] }) {
   })
 
   const years = new Map<string, ArchiveArticle[]>()
-  for (const article of matches) {
-    const year = article.date.slice(0, 4)
-    const entries = years.get(year)
-    if (entries) {
-      entries.push(article)
-    } else {
-      years.set(year, [article])
+  if (!preview) {
+    for (const article of matches) {
+      const year = article.date.slice(0, 4)
+      const entries = years.get(year)
+      if (entries) {
+        entries.push(article)
+      } else {
+        years.set(year, [article])
+      }
     }
   }
+  const visiblePreview = preview ? matches.slice(0, filtering ? 6 : 4) : []
+  const matchCount = filtering
+    ? `${matches.length} of ${articles.length}`
+    : articles.length
+  const noteLabel = articles.length === 1 ? 'note' : 'notes'
+  const resultsText =
+    preview && visiblePreview.length < matches.length
+      ? `Showing ${visiblePreview.length} of ${matches.length} notes`
+      : `${matchCount} ${noteLabel}`
 
   function resetFilters() {
     setQuery('')
@@ -91,10 +108,7 @@ export function ArticleArchive({ articles }: { articles: ArchiveArticle[] }) {
 
       <div className={styles.results}>
         <p role="status" aria-atomic="true">
-          {filtering
-            ? `${matches.length} of ${articles.length}`
-            : articles.length}{' '}
-          {articles.length === 1 ? 'note' : 'notes'}
+          {resultsText}
         </p>
         {filtering && matches.length > 0 && (
           <button type="button" className={styles.reset} onClick={resetFilters}>
@@ -119,6 +133,20 @@ export function ArticleArchive({ articles }: { articles: ArchiveArticle[] }) {
             </>
           )}
         </div>
+      )}
+
+      {visiblePreview.length > 0 && (
+        <ul className={styles.previewGrid} role="list">
+          {visiblePreview.map((article) => (
+            <li key={article.slug} className={styles.previewEntry}>
+              <h3>
+                <Link href={`/articles/${article.slug}`}>{article.title}</Link>
+              </h3>
+              <p>{article.description}</p>
+              <time dateTime={article.date}>{formatDate(article.date)}</time>
+            </li>
+          ))}
+        </ul>
       )}
 
       {[...years].map(([year, entries]) => (

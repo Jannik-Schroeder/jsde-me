@@ -6,12 +6,12 @@ Der erste Besuch führt von Janniks eigenem Rack ins Inventar oder in einen sein
 
 ## Referenz und Übertragung
 
-Die Untersuchung vom 23. November 2026 umfasst die Startseite, die öffentlichen Seitentypen aus den Sitemaps und die verlinkten Werkzeuge. Die Gestaltung verwendet eigene Fotos, Schriften und Hardware-Illustrationen.
+Die Untersuchung vom 23. November 2026 umfasst die Startseite, die öffentlichen Seitentypen aus den Sitemaps und die verlinkten Werkzeuge. Die Gestaltung verwendet Janniks eigene Fotos, eine eigens gezeichnete Rack-Illustration und die lokal eingebundenen Schriftfamilien der Referenz.
 
 | Beobachtung auf OhnyFans | Entscheidung für jsde.me |
 | --- | --- |
-| Die Startseite stellt eine Frage in übergroßer Pixelschrift. Die kurze Antwort, eine Akzentfarbe und zwei Aktionen bestimmen den ersten Blick. | „Inside the homelab“ führt zur Person und ihrem Thema. Der Rack-Betrachter zeigt drei datierte Originalaufnahmen. Zwei Links führen zu Artikeln und beruflichen Stationen. |
-| Live-Status, Stream-Historie, Chat und Zeit seit der letzten Übertragung geben dem Besuch zeitlichen Kontext. | Die jüngste Veröffentlichung steht direkt unter dem Einstieg. Der vorhandene Tagesstatus zeigt nur gelieferte Werte. Historische Rack-Fotos tragen ihr Datum. |
+| Die Startseite stellt eine Frage in übergroßer Pixelschrift. Die kurze Antwort, eine Akzentfarbe und zwei Aktionen bestimmen den ersten Blick. | „Do I host this site myself?“ und „Yep.“ greifen den Frage-Antwort-Einstieg auf. Der Rack-Betrachter zeigt drei datierte Originalaufnahmen. Zwei Links führen zu Artikeln und beruflichen Stationen. |
+| Live-Status, Stream-Historie, Chat und Zeit seit der letzten Übertragung geben dem Besuch zeitlichen Kontext. | Eine Paderborner Uhr, die tatsächlichen Publikationstage der letzten vier Wochen und ein laufendes Artikelband stehen unter dem Einstieg. Der vorhandene Tagesstatus zeigt nur gelieferte Werte. Historische Rack-Fotos tragen ihr Datum. |
 | Die Ohne-pedia erschließt kurze Einträge durch Suche und Tiefenfilter. | Field Notes verbindet Volltextsuche in Titel und Beschreibung mit Themenfiltern. Jahresgruppen, Direktlinks und RSS bedienen Leser, die chronologisch stöbern. |
 | Die Toolbox stellt die Handlung jedes Spiels vor. Skindle hat einen Tagesrhythmus, Higher or Lower eine Folge kurzer Entscheidungen, das Quiz ein Ergebnis. | Patch Panel hat drei überschaubare Runden mit Diensten und Ports. Fehler und Hinweise erklären die Zuordnung. Die persönliche Bestleistung bleibt im Browser. |
 | Tracker, Clip-Roulette, Chat-Meter und Soundboard schöpfen aus Streams und Community-Beiträgen. | Der interaktive Teil schöpft aus Janniks Fachgebiet. Der bestehende Terminal-Assistent beantwortet persönliche Fragen, das Rack-Archiv lässt sich durchblättern. |
@@ -19,6 +19,12 @@ Die Untersuchung vom 23. November 2026 umfasst die Startseite, die öffentlichen
 | FAQ, Profile und Footer bündeln häufige Fragen, Quellen und Kontaktwege. | Profil, Projektlinks, Terminal, RSS, Kontakt, Impressum und Datenschutz bleiben direkt erreichbar. |
 
 Referenzseiten: [Startseite und Lore](https://ohnyfans.com/), [Ohne-pedia](https://ohnyfans.com/ohne-pedia/), [Toolbox](https://ohnyfans.com/tools/), [Vault](https://ohnyfans.com/vault/), [Profil](https://ohnyfans.com/ohnepixel/) und [FAQ](https://ohnyfans.com/faq/).
+
+## Visueller Abgleich in Playwright
+
+Am 23. November 2026 wurden bei 1440 und 390 Pixeln Breite das Menü, die Suche, der Gold-Filter, der Einstieg in Skindle und die Timeline der öffentlichen Referenz bedient und aufgezeichnet. Bei 1440 Pixeln beginnt die Frage bei x=40 und y=101. Die 95 Pixel große Schrift hat eine Zeilenhöhe von 0,9. Die rote Antwort beginnt bei y=358 mit einer Schriftgröße von 245 Pixeln. Gemessen wurden Geist Pixel Square, DM Sans und Silkscreen. Zwei horizontal versetzte Konturen geben der Überschrift ihr kräftiges Pixelbild.
+
+Die Startseite von jsde.me übernimmt diese Maße, den hellen Grund, den Wechsel zum dunklen Werkzeugbereich, die beim Abwärtsscrollen ausweichende Kopfzeile und die Bewegung der Timeline. Das Menü klappt auf kleinen Bildschirmen unter der Kopfzeile auf. Besucher können den Ticker anhalten oder das Rack per Tastatur bedienen. Bei reduzierter Bewegung ist die Zeitachse direkt horizontal bedienbar. Die Uhr verwendet Europe/Berlin.
 
 ## Arbeitspakete und Abnahme
 

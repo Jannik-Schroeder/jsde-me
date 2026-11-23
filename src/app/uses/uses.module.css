@@ -1,4 +1,5 @@
 .page {
+  --gear-accent: #a72e36;
   padding-block: clamp(3.25rem, 7vw, 7rem);
 }
 
@@ -13,14 +14,16 @@
 .intro h1,
 .group h2 {
   font-family: var(--font-display, var(--font-sans));
-  font-weight: 800;
-  letter-spacing: -0.045em;
-  line-height: 0.88;
+  font-weight: 400;
+  letter-spacing: 0.076em;
+  text-shadow: var(--pixel-ink);
+  text-transform: uppercase;
+  line-height: 0.9;
 }
 
 .intro h1 {
   margin: 0 0 1.1rem;
-  font-size: clamp(5rem, 15vw, 12rem);
+  font-size: clamp(3.3rem, 9vw, 8rem);
 }
 
 .intro > p {
@@ -40,7 +43,7 @@
 .jumpLinks a,
 .figure figcaption,
 .source time {
-  font-family: var(--font-mono);
+  font-family: var(--font-label, var(--font-mono));
   font-size: 0.72rem;
 }
 
@@ -62,7 +65,7 @@
 .jumpLinks a span,
 .figure a span,
 .source > span:last-child {
-  color: #c2fa55;
+  color: var(--gear-accent);
 }
 
 .figure {
@@ -98,16 +101,16 @@
 
 .group {
   display: grid;
-  grid-template-columns: minmax(0, 15rem) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 18rem) minmax(0, 1fr);
   gap: clamp(1.25rem, 4vw, 4rem);
-  margin-block-start: 3.5rem;
-  border-block-start: 1px solid var(--color-border);
-  padding-block-start: 1.25rem;
+  margin-block-start: 4rem;
+  border-block-start: 1px dashed #8e989e;
+  padding-block-start: 1.65rem;
   scroll-margin-top: 6rem;
 }
 
 .group h2 {
-  font-size: clamp(2rem, 4.6vw, 3.7rem);
+  font-size: clamp(1.2rem, 2.35vw, 2rem);
   line-height: 0.95;
 }
 
@@ -186,4 +189,43 @@
   .source {
     justify-self: start;
   }
+}
+
+.figure {
+  position: relative;
+  border-color: #121314;
+  box-shadow: 0.45rem 0.45rem 0 #c9d0d6;
+}
+
+.figure::before {
+  position: absolute;
+  z-index: 1;
+  right: 0.85rem;
+  top: -0.22rem;
+  width: 2.5rem;
+  height: 0.44rem;
+  background: repeating-linear-gradient(
+    90deg,
+    #eb4b4b 0 0.45rem,
+    #121314 0.45rem 0.62rem
+  );
+  content: '';
+}
+
+.figure figcaption {
+  font-size: 0.68rem;
+}
+
+.jumpLinks a {
+  min-height: 2.75rem;
+  border-block-end: 1px solid var(--color-border);
+}
+
+.group h2::before {
+  display: block;
+  width: 1.65rem;
+  height: 0.2rem;
+  margin-block-end: 0.65rem;
+  background: #eb4b4b;
+  content: '';
 }

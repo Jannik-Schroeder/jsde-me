@@ -3,6 +3,7 @@ import { type Metadata } from 'next'
 import localFont from 'next/font/local'
 
 import Link from 'next/link'
+import { BackToTop } from '@/components/BackToTop'
 import { SiteHeader } from '@/components/SiteHeader'
 import { me, projectsUrl } from '@/lib/me'
 import { linkEvent } from '@/lib/link-events'
@@ -12,10 +13,10 @@ import '@/styles/hub.css'
 // The woff2 files live in the repo (latin subset, variable weight) so the build
 // never has to reach fonts.gstatic.com.
 const sans = localFont({
-  src: '../fonts/Inter-latin-variable.woff2',
+  src: '../fonts/DMSans-Variable.woff2',
   weight: '100 900',
   display: 'swap',
-  variable: '--font-inter',
+  variable: '--font-dm-sans',
 })
 
 const mono = localFont({
@@ -26,10 +27,17 @@ const mono = localFont({
 })
 
 const display = localFont({
-  src: '../fonts/BarlowCondensed-ExtraBold-latin.woff2',
-  weight: '800',
+  src: '../fonts/GeistPixel-Square.woff2',
+  weight: '400',
   display: 'swap',
   variable: '--font-display',
+})
+
+const label = localFont({
+  src: '../fonts/Silkscreen-Regular.woff2',
+  weight: '400',
+  display: 'swap',
+  variable: '--font-label',
 })
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'
@@ -70,13 +78,14 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${sans.variable} ${mono.variable} ${display.variable} h-full antialiased`}
+      className={`${sans.variable} ${mono.variable} ${display.variable} ${label.variable} h-full antialiased`}
     >
-      <body className="bg-bg text-fg min-h-full font-sans">
+      <body id="top" className="bg-bg text-fg min-h-full font-sans">
         <a href="#content" className="skip-link">
           Skip to content
         </a>
         <SiteHeader />
+        <BackToTop />
         <div id="content" tabIndex={-1}>
           {children}
         </div>
@@ -119,6 +128,13 @@ export default function RootLayout({
                 Legal notice / Impressum
               </a>
             </p>
+            <a
+              href="#top"
+              className="footer-sign"
+              aria-label="Back to the top of jsde.me"
+            >
+              jsde.me<span aria-hidden="true">↑</span>
+            </a>
           </div>
         </footer>
         <Script
