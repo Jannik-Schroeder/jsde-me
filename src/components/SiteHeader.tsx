@@ -10,7 +10,7 @@ const sections = [
   ['/articles', 'Field notes'],
   ['/uses', 'Gear'],
   ['/lab', 'Playground'],
-  ['/profile#career', 'Career'],
+  ['/#career', 'Career'],
   ['/profile', 'Profile'],
 ] as const
 

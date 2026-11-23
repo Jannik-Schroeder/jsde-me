@@ -47,9 +47,9 @@ export default async function Home() {
           <Link className="primary-action" href="/articles">
             Read the field notes <b aria-hidden="true">→</b>
           </Link>
-          <Link className="paper-link" href="/profile#career">
+          <a className="paper-link" href="#career">
             Career timeline <b aria-hidden="true">→</b>
-          </Link>
+          </a>
         </div>
       </AwakeHero>
       <NotesTicker
@@ -112,7 +112,11 @@ export default async function Home() {
         </div>
       </section>
       <CareerRail roles={[...me.roles].reverse()} />
-      <section className="hub-wrap rack-section" aria-labelledby="home-rack">
+      <section
+        id="rack-archive"
+        className="hub-wrap rack-section"
+        aria-labelledby="home-rack"
+      >
         <div>
           <h2 id="home-rack" className="section-display">
             Rack
@@ -120,8 +124,8 @@ export default async function Home() {
             archive
           </h2>
           <p>
-            The switches, servers and patch cables behind the write-ups. Flip
-            through photos from the builds.
+            Two firewalls, two core switches and a stack of servers. Flip back
+            to see what my rack looked like in 2023.
           </p>
           <Link className="paper-link" href="/uses">
             Explore my gear <b aria-hidden="true">→</b>
