@@ -709,7 +709,7 @@
   padding-top: 16px;
   border-top: 1px dotted var(--caption);
   color: var(--ink);
-  font: 400 clamp(56px, 10.4vw, 156px)/1 var(--pixel);
+  font: 400 clamp(42px, 10.4vw, 156px)/1 var(--pixel);
   text-transform: uppercase;
   text-shadow: var(--pixel-ink);
   letter-spacing: 0.076em;
