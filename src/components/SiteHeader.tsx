@@ -1,64 +1,52 @@
-import { linkEvent } from '@/lib/link-events'
-import { me, projectsUrl } from '@/lib/me'
+'use client'
 
-/** Order of the quiet link row; phanes.net leads because it is the one action,
- *  and Articles is the only page-level entry point on the site. */
-const ORDER = ['GitHub', 'LinkedIn', 'X', 'Email']
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 
-function headerLinks() {
-  const known = (label: string) => me.links.find((link) => link.label === label)
-  const rss = known('RSS')
-  return [
-    { label: 'phanes.net', href: projectsUrl },
-    ...ORDER.map(known).filter((link) => link !== undefined),
-    { label: 'Articles', href: '/articles' },
-    ...(rss === undefined ? [] : [rss]),
-  ]
-}
+const sections = [
+  ['/', 'Overview'],
+  ['/articles', 'Field notes'],
+  ['/uses', 'Gear'],
+  ['/lab', 'Playground'],
+  ['/profile', 'Profile'],
+] as const
 
-/**
- * One line at the top of the column: who this is on the left, where to find him
- * on the right. No portrait, no logos — the terminal below is the hero.
- */
 export function SiteHeader() {
-  const links = headerLinks()
-
+  const current = usePathname()
   return (
-    <header className="rise flex flex-wrap items-baseline justify-between gap-x-8 gap-y-2">
-      <h1 className="text-[22px] font-semibold tracking-tight">
-        {me.name}{' '}
-        <span className="text-fg-dim text-[15px] font-normal">
-          {me.headline}
-        </span>
-      </h1>
-
-      <nav aria-label="Elsewhere">
-        <ul className="text-fg-dim flex flex-wrap items-baseline gap-x-2 text-[13px]">
-          {links.map((link, index) => (
-            <li key={link.href} className="flex items-baseline gap-2">
-              {index > 0 && (
-                <span aria-hidden="true" className="text-fg-faint">
-                  ·
-                </span>
-              )}
-              <a
-                href={link.href}
-                {...linkEvent(link.href)}
-                className="hover:text-fg group inline-flex items-baseline gap-1 motion-safe:transition-colors"
-              >
-                <span className="link-draw group-hover:bg-[length:100%_1px]">
-                  {link.label}
-                </span>
-                {link.href.startsWith('http') && (
-                  <span aria-hidden="true" className="text-fg-faint">
-                    ↗
-                  </span>
-                )}
-              </a>
-            </li>
+    <header className="hub-header">
+      <div className="hub-wrap header-inner">
+        <Link className="brand" href="/" aria-label="jsde.me home">
+          <span className="brand-mark" aria-hidden="true">
+            j<span>s</span>
+          </span>
+          jsde<span className="brand-domain">.me</span>
+        </Link>
+        <nav aria-label="Main navigation" className="hub-nav">
+          {sections.map(([path, name]) => (
+            <Link
+              key={path}
+              href={path}
+              aria-current={
+                current === path
+                  ? 'page'
+                  : path !== '/' && current.startsWith(path + '/')
+                    ? 'location'
+                    : undefined
+              }
+            >
+              {name}
+            </Link>
           ))}
-        </ul>
-      </nav>
+        </nav>
+        <Link
+          href="/terminal"
+          className="terminal-link"
+          aria-current={current === '/terminal' ? 'page' : undefined}
+        >
+          <span aria-hidden="true">&gt;_</span> Terminal
+        </Link>
+      </div>
     </header>
   )
 }

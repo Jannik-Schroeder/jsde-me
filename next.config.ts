@@ -8,7 +8,7 @@ const nextConfig: NextConfig = {
   output: 'standalone',
   async redirects() {
     return [
-      { source: '/about', destination: '/', permanent: true },
+      { source: '/about', destination: '/profile', permanent: true },
       { source: '/gallery', destination: '/', permanent: true },
       { source: '/speaking', destination: '/', permanent: true },
       { source: '/thank-you', destination: '/', permanent: true },

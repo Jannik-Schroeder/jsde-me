@@ -1,0 +1,189 @@
+.page {
+  padding-block: clamp(3.25rem, 7vw, 7rem);
+}
+
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.78fr);
+  align-items: end;
+  gap: clamp(1.5rem, 6vw, 6rem);
+  margin-block-end: clamp(4rem, 8vw, 7rem);
+}
+
+.intro h1,
+.group h2 {
+  font-family: var(--font-display, var(--font-sans));
+  font-weight: 800;
+  letter-spacing: -0.045em;
+  line-height: 0.88;
+}
+
+.intro h1 {
+  margin: 0 0 1.1rem;
+  font-size: clamp(5rem, 15vw, 12rem);
+}
+
+.intro > p {
+  color: var(--color-fg-dim);
+  max-width: 38ch;
+  font-size: clamp(1rem, 1.6vw, 1.17rem);
+  line-height: 1.65;
+}
+
+.jumpLinks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.25rem;
+  margin-block-start: 2rem;
+}
+
+.jumpLinks a,
+.figure figcaption,
+.source time {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+}
+
+.jumpLinks a,
+.figure a {
+  min-height: 2rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+}
+
+.jumpLinks a:hover,
+.figure a:hover,
+.source:hover > span:first-child {
+  text-decoration: underline;
+  text-underline-offset: 0.25em;
+}
+
+.jumpLinks a span,
+.figure a span,
+.source > span:last-child {
+  color: #c2fa55;
+}
+
+.figure {
+  min-width: 0;
+  margin: 0;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-elev);
+}
+
+.figure img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1.42;
+  height: auto;
+  object-fit: cover;
+  object-position: 50% 34%;
+}
+
+.figure figcaption {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  padding: 0.35rem 0.85rem;
+  color: var(--color-fg-dim);
+  border-block-start: 1px solid var(--color-border);
+}
+
+.figure a {
+  color: var(--color-fg);
+}
+
+.group {
+  display: grid;
+  grid-template-columns: minmax(0, 15rem) minmax(0, 1fr);
+  gap: clamp(1.25rem, 4vw, 4rem);
+  margin-block-start: 3.5rem;
+  border-block-start: 1px solid var(--color-border);
+  padding-block-start: 1.25rem;
+  scroll-margin-top: 6rem;
+}
+
+.group h2 {
+  font-size: clamp(2rem, 4.6vw, 3.7rem);
+  line-height: 0.95;
+}
+
+.inventory {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(9rem, 1fr);
+  align-items: start;
+  gap: 0.75rem 1.5rem;
+  padding-block: 0.9rem;
+  border-block-end: 1px solid var(--color-border);
+}
+
+.item:first-child {
+  padding-block-start: 0;
+}
+
+.item h3 {
+  font-size: 1rem;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.item p {
+  margin-block-start: 0.25rem;
+  color: var(--color-fg-dim);
+  font-size: 0.875rem;
+  line-height: 1.55;
+}
+
+.source {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 0.2rem 0.5rem;
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.source time {
+  color: var(--color-fg-dim);
+  grid-row: 2;
+}
+
+.source > span:last-child {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+}
+
+@media (max-width: 850px) {
+  .group {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .hero {
+    grid-template-columns: 1fr;
+  }
+
+  .figure img {
+    aspect-ratio: 1.55;
+  }
+}
+
+@media (max-width: 500px) {
+  .item {
+    grid-template-columns: 1fr;
+  }
+
+  .source {
+    justify-self: start;
+  }
+}

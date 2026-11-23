@@ -3,12 +3,6 @@ import { TerminalChat } from '@/components/TerminalChat'
 import { TerminalTitleBar } from '@/components/TerminalTitleBar'
 import { type ArticleMeta } from '@/lib/articles'
 
-/**
- * The hero: the terminal window, taking whatever height the column has left
- * over. Server
- * component — the boot text and its article links are in the HTML before any
- * JavaScript runs, and the client chat continues below them.
- */
 export function Terminal({ articles }: { articles: ArticleMeta[] }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col md:flex-none">

@@ -1,0 +1,313 @@
+.page {
+  padding-block: clamp(3.25rem, 7vw, 7rem);
+}
+
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  align-items: end;
+  gap: clamp(1.5rem, 6vw, 6rem);
+  margin-block-end: clamp(4rem, 8vw, 7rem);
+}
+
+.location,
+.dates,
+.links,
+.projects a,
+.careerLink,
+.yearAxis,
+.labNote a {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+}
+
+.location {
+  margin-block-end: 1rem;
+  color: #c2fa55;
+}
+
+.intro h1,
+.section h2 {
+  font-family: var(--font-display, var(--font-sans));
+  font-weight: 800;
+  letter-spacing: -0.045em;
+  line-height: 0.9;
+}
+
+.intro h1 {
+  margin-block-end: 1.4rem;
+  font-size: clamp(4rem, 9.4vw, 8.5rem);
+  overflow-wrap: anywhere;
+}
+
+.bio {
+  max-width: 52ch;
+  color: var(--color-fg-dim);
+  font-size: clamp(1rem, 1.6vw, 1.13rem);
+  line-height: 1.65;
+}
+
+.links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1.2rem;
+  margin-block-start: 1.65rem;
+}
+
+.links a,
+.projects a,
+.careerLink,
+.labNote a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45em;
+  min-height: 2rem;
+}
+
+.links a:hover,
+.projects a:hover,
+.careerLink:hover,
+.labNote a:hover {
+  text-decoration: underline;
+  text-underline-offset: 0.25em;
+}
+
+.links span,
+.projects span,
+.careerLink span,
+.labNote span {
+  color: #c2fa55;
+}
+
+.careerLink {
+  margin-block-start: 1.2rem;
+  color: #c2fa55;
+}
+
+.portrait {
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-elev);
+}
+
+.portrait img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 0.98;
+  object-fit: cover;
+  object-position: 50% 38%;
+}
+
+.section {
+  display: grid;
+  grid-template-columns: minmax(0, 15rem) minmax(0, 1fr);
+  gap: clamp(1.25rem, 4vw, 4rem);
+  margin-block-start: 3.5rem;
+  border-block-start: 1px solid var(--color-border);
+  padding-block-start: 1.25rem;
+  scroll-margin-block-start: 5.5rem;
+}
+
+.section h2 {
+  font-size: clamp(2rem, 4.6vw, 3.7rem);
+}
+
+.careerIntro {
+  margin-block-start: 0.8rem;
+  max-width: 32ch;
+  color: var(--color-fg-dim);
+  font-size: 0.875rem;
+  line-height: 1.55;
+}
+
+.timeline {
+  --timeline-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  --timeline-gap: 1.5rem;
+  display: grid;
+  grid-template-columns: var(--timeline-columns);
+  gap: 0 var(--timeline-gap);
+  min-width: 0;
+}
+
+.yearAxis {
+  position: relative;
+  grid-column: 2;
+  height: 1.45rem;
+  color: var(--color-fg-dim);
+  border-block-end: 1px solid var(--color-border);
+}
+
+.yearAxis > span {
+  position: absolute;
+  transform: translateX(-25%);
+}
+
+.yearAxis > span:first-child {
+  transform: none;
+}
+
+.yearAxis > span:last-child {
+  transform: translateX(-50%);
+}
+
+.roles {
+  grid-column: 1 / -1;
+}
+
+.roles li {
+  display: grid;
+  grid-template-columns: var(--timeline-columns);
+  gap: 0.8rem var(--timeline-gap);
+  align-items: center;
+  padding-block: 0.95rem;
+  border-block-end: 1px solid var(--color-border);
+}
+
+.role {
+  border-inline-start: 1px solid var(--color-border);
+  padding-inline-start: 0.8rem;
+}
+
+.roles .independent .role {
+  border-inline-start: 3px solid #c2fa55;
+}
+
+.roles .independent h3 {
+  color: #c2fa55;
+  font-size: 1.3rem;
+}
+
+.track {
+  position: relative;
+  height: 0.75rem;
+  background: var(--color-bg-elev);
+  border-block: 1px solid var(--color-border);
+}
+
+.track span {
+  position: absolute;
+  inset-block: -1px;
+  min-width: 2px;
+  background: var(--color-fg-dim);
+}
+
+.track .ongoing {
+  background: #c2fa55;
+}
+
+.roles h3,
+.projects h3 {
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.roles p,
+.projects p {
+  color: var(--color-fg-dim);
+  line-height: 1.55;
+}
+
+.roles h3 + p,
+.projects p {
+  margin-block-start: 0.25rem;
+  font-size: 0.875rem;
+}
+
+.dates {
+  margin-block-end: 0.25rem;
+}
+
+.projects {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-block-end: 1px solid var(--color-border);
+}
+
+.projects li {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 0 1.15rem 0.85rem;
+}
+
+.projects li:first-child {
+  padding-inline-start: 0;
+}
+
+.projects li + li {
+  border-inline-start: 1px solid var(--color-border);
+}
+
+.projects p {
+  flex: 1;
+}
+
+.projects a {
+  margin-block-start: 1rem;
+}
+
+.labNote {
+  max-width: 54ch;
+  margin-block-start: 3.5rem;
+  border-inline-start: 2px solid #c2fa55;
+  padding-inline-start: 1.15rem;
+}
+
+.labNote h2 {
+  font-weight: 650;
+}
+
+.labNote p {
+  margin-block-start: 0.45rem;
+  color: var(--color-fg-dim);
+  line-height: 1.55;
+}
+
+.labNote ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 1rem;
+  margin-block-start: 0.55rem;
+}
+
+@media (max-width: 850px) {
+  .section {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 700px) {
+  .hero {
+    grid-template-columns: 1fr;
+  }
+
+  .portrait img {
+    aspect-ratio: 1.35;
+    object-position: 50% 28%;
+  }
+}
+
+@media (max-width: 500px) {
+  .timeline {
+    --timeline-columns: minmax(0, 1fr);
+  }
+
+  .yearAxis {
+    grid-column: 1;
+  }
+
+  .roles li,
+  .projects {
+    grid-template-columns: 1fr;
+  }
+
+  .projects li {
+    padding-inline: 0;
+  }
+
+  .projects li + li {
+    padding-block-start: 0.85rem;
+    border-inline-start: 0;
+    border-block-start: 1px solid var(--color-border);
+  }
+}

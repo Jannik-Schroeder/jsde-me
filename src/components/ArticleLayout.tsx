@@ -5,6 +5,8 @@ import { Prose } from '@/components/Prose'
 import { isPublished, type ArticleMeta } from '@/lib/articles'
 import { formatDate } from '@/lib/formatDate'
 
+import styles from '@/components/archive/archive.module.css'
+
 /**
  * Renders one MDX article page. Every `src/app/articles/<slug>/page.mdx`
  * default-exports `(props) => <ArticleLayout article={article} {...props} />`,
@@ -24,44 +26,33 @@ export function ArticleLayout({
   }
 
   return (
-    <div className="mx-auto max-w-[70ch] px-4 py-16 sm:py-24">
-      <Link
-        href="/articles"
-        className="link text-fg-dim hover:text-fg rise inline-flex items-center gap-2 text-sm motion-safe:transition-colors"
-      >
-        <span aria-hidden="true">&larr;</span>
-        Back to articles
-      </Link>
+    <main className={`hub-wrap ${styles.reading}`}>
+      <article>
+        <Link href="/articles" className={styles.readingLink}>
+          <span aria-hidden="true">← </span>
+          Back to articles
+        </Link>
 
-      <article className="mt-10">
-        <header className="rise">
-          <h1 className="text-fg text-2xl font-semibold tracking-tight sm:text-3xl">
-            {article.title}
-          </h1>
-          <p className="text-fg-faint mt-3 font-mono text-sm">
+        <header className={styles.readingHeader}>
+          <h1>{article.title}</h1>
+          <p className={styles.readingMeta}>
             <time dateTime={article.date}>{formatDate(article.date)}</time>
             {' · '}
             {article.author}
           </p>
         </header>
 
-        <Prose
-          className="rise mt-10"
-          style={{ animationDelay: '90ms' }}
-          data-mdx-content
-        >
+        <Prose className="mt-8 sm:mt-10" data-mdx-content>
           {children}
         </Prose>
-      </article>
 
-      <footer className="border-border mt-16 border-t pt-8">
-        <Link
-          href="/"
-          className="link text-fg-dim hover:text-fg text-sm motion-safe:transition-colors"
-        >
-          &larr; jsde.me
-        </Link>
-      </footer>
-    </div>
+        <footer className="border-border mt-16 border-t pt-8">
+          <Link href="/" className={styles.readingLink}>
+            <span aria-hidden="true">← </span>
+            jsde.me
+          </Link>
+        </footer>
+      </article>
+    </main>
   )
 }

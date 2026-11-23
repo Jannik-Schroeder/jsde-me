@@ -13,13 +13,13 @@
  * text-fg-faint, text-accent, font-mono, font-sans.
  */
 @theme {
-  --color-bg: #08080a;
-  --color-bg-elev: #131318;
-  --color-border: #2b2b33;
-  --color-fg: #ededf0;
-  --color-fg-dim: #a8a8b3;
-  --color-fg-faint: #7c7c88;
-  --color-accent: #6d9eeb;
+  --color-bg: #101211;
+  --color-bg-elev: #191c19;
+  --color-border: #353b35;
+  --color-fg: #f2f3eb;
+  --color-fg-dim: #bcc0b8;
+  --color-fg-faint: #9ca399;
+  --color-accent: #c2fa55;
 
   --font-mono:
     var(--font-jetbrains), ui-monospace, SFMono-Regular, 'SF Mono', Menlo,
@@ -173,48 +173,6 @@
 .terminal-scroll {
   scrollbar-width: thin;
   scrollbar-color: var(--color-border) transparent;
-}
-
-/*
- * The one centred column and the terminal inside it. Both live in CSS rather
- * than in utilities because they are viewport maths, not scale steps.
- */
-.page-column {
-  width: calc(100vw - 2rem);
-}
-
-/* The window takes whatever height the column has left; this is only a floor so
-   it can never collapse to a sliver. */
-.terminal-window {
-  min-height: 15rem;
-}
-
-@media (min-width: 48rem) {
-  .page-column {
-    width: min(60vw, 1000px);
-    min-width: 640px;
-  }
-
-  /* Not flex-grown: the block is meant to sit in the middle of the viewport
-     with air above and below, not to stretch into it. */
-  .terminal-window {
-    flex: none;
-    height: clamp(320px, 42vh, 520px);
-  }
-}
-
-/* Shorter than 40rem there is nothing left to give: let the page scroll instead
-   of cutting the terminal off. */
-@media (max-height: 40rem) {
-  [data-page='home'] {
-    height: auto;
-    min-height: 100dvh;
-    overflow: visible;
-  }
-
-  .terminal-window {
-    min-height: 22rem;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {

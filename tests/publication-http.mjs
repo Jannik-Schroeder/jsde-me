@@ -20,6 +20,15 @@ for(const [instant,visible] of [['2026-10-24T12:00:00+02:00',false],['2027-01-01
   const html=await response.text();assert.equal(html.includes(title),visible,'future metadata/title must stay unavailable');
   if(visible)assert.ok(html.includes('https://jsde.me'+article),'self canonical present');
   const map=await (await fetch('http://127.0.0.1:'+port+'/sitemap.xml')).text();assert.equal(map.includes('https://jsde.me'+article),visible,'sitemap uses the same date gate');
+  for (const route of ['/', '/articles', '/terminal']) {
+    const page = await fetch('http://127.0.0.1:' + port + route);
+    assert.equal(page.status, 200);
+    const source = await page.text();
+    assert.equal(source.includes('Building a Dedicated HiFi Endpoint with Plexamp'), visible, route + ' respects the publication date');
+  }
+  const gear = await fetch('http://127.0.0.1:' + port + '/uses');
+  assert.equal(gear.status, 200);
+  assert.equal((await gear.text()).includes('Lenovo ThinkCentre M93p'), visible, 'gear follows its source article');
   assert.equal((await fetch('http://127.0.0.1:'+port+'/articles/no-such-article')).status,404);
   console.log('PASS actual standalone HTTP publication: '+instant+' (visible='+visible+')');
  }finally{if(child){child.kill('SIGTERM');await new Promise(resolve=>{if(child.exitCode!==null)resolve();else child.once('exit',resolve);});}await fs.rm(dir,{recursive:true,force:true});}

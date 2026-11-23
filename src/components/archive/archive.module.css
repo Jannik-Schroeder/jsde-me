@@ -1,0 +1,234 @@
+.archive {
+  padding-block: clamp(3.5rem, 8vw, 7.5rem) 6rem;
+}
+
+.archiveHeader {
+  padding-block-end: clamp(2rem, 5vw, 3.75rem);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.display {
+  font-family: var(--font-display, var(--font-sans));
+  font-weight: 800;
+  font-size: clamp(4.5rem, 12.5vw, 10rem);
+  line-height: 0.83;
+  letter-spacing: -0.035em;
+  text-transform: uppercase;
+}
+
+.archiveHeader > p {
+  margin-top: 1.5rem;
+  max-width: 38ch;
+  font-size: clamp(1.05rem, 2vw, 1.35rem);
+  line-height: 1.55;
+  color: var(--color-fg-dim);
+}
+
+.controls {
+  display: grid;
+  gap: 1.5rem 2rem;
+  padding-block: 1.5rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.search,
+.filters {
+  min-width: 0;
+}
+
+.search span,
+.filters legend,
+.results,
+.row time,
+.topics,
+.readingMeta {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--color-fg-dim);
+}
+
+.search span,
+.filters legend {
+  display: block;
+  margin-bottom: 0.65rem;
+}
+
+.search input {
+  display: block;
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-elev);
+  color: var(--color-fg);
+  font-size: 0.875rem;
+}
+
+.search input::placeholder {
+  color: var(--color-fg-dim);
+  opacity: 1;
+}
+
+.filterButtons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.filterButtons button {
+  min-height: 2.75rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--color-border);
+  color: var(--color-fg-dim);
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.filterButtons button:hover {
+  color: var(--color-fg);
+  border-color: var(--color-fg-dim);
+}
+
+.filterButtons button[aria-pressed='true'] {
+  background: #c2fa55;
+  border-color: #c2fa55;
+  color: #111708;
+}
+
+.archive :where(a, button, input):focus-visible,
+.reading a:focus-visible {
+  outline: 2px solid #c2fa55;
+  outline-offset: 3px;
+}
+
+.results {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 3rem;
+  gap: 1rem;
+}
+
+.reset {
+  min-height: 2.75rem;
+  color: #c2fa55;
+  font-size: 0.8rem;
+  text-decoration: underline;
+  text-underline-offset: 0.25em;
+  cursor: pointer;
+}
+
+.year {
+  margin-block: 1.5rem 3rem;
+}
+
+.year > h2,
+.empty h2 {
+  margin-bottom: 0.75rem;
+  color: #c2fa55;
+  font-family: var(--font-display, var(--font-sans));
+  font-size: clamp(2rem, 4vw, 3.5rem);
+  font-weight: 750;
+  line-height: 1;
+}
+
+.row {
+  display: grid;
+  gap: 0.5rem 1.25rem;
+  padding-block: 1.3rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.row:last-child {
+  border-bottom: 1px solid var(--color-border);
+}
+
+.row time,
+.topics {
+  padding-top: 0.3em;
+  line-height: 1.65;
+}
+
+.row h3 {
+  font-size: clamp(1.05rem, 2.2vw, 1.375rem);
+  font-weight: 650;
+  line-height: 1.3;
+}
+
+.row a:hover,
+.readingLink:hover {
+  color: #c2fa55;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.row h3 + p,
+.empty p {
+  margin-top: 0.4rem;
+  max-width: 66ch;
+  color: var(--color-fg-dim);
+  font-size: 0.925rem;
+  line-height: 1.6;
+}
+
+.empty {
+  padding-block: 2rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.reading {
+  padding-block: clamp(3rem, 7vw, 6rem) 5rem;
+}
+
+.reading > article {
+  margin-inline: auto;
+  max-width: 74ch;
+}
+
+.readingHeader {
+  padding-block: 2.5rem 1.75rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.readingHeader h1 {
+  font-family: var(--font-display, var(--font-sans));
+  font-size: clamp(2.7rem, 7vw, 5.25rem);
+  font-weight: 780;
+  line-height: 0.95;
+  letter-spacing: -0.025em;
+  overflow-wrap: anywhere;
+}
+
+.readingMeta {
+  margin-top: 1.25rem;
+}
+
+.readingLink {
+  color: var(--color-fg-dim);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+}
+
+@media (min-width: 44rem) {
+  .row {
+    grid-template-columns: 10rem minmax(0, 1fr);
+  }
+
+  .topics {
+    grid-column: 2;
+  }
+}
+
+@media (min-width: 64rem) {
+  .controls {
+    grid-template-columns: minmax(16rem, 1fr) auto;
+  }
+
+  .row {
+    grid-template-columns: 10rem minmax(0, 1fr) 13rem;
+  }
+
+  .topics {
+    grid-column: auto;
+  }
+}
