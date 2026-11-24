@@ -1,6 +1,6 @@
 import Image from 'next/image'
 import Link from 'next/link'
-import type { Metadata } from 'next'
+import { pageMetadata } from '@/lib/page-metadata'
 import { connection } from 'next/server'
 
 import { getAllArticles } from '@/lib/articles'
@@ -8,12 +8,12 @@ import { getAllArticles } from '@/lib/articles'
 import rack from './rack.webp'
 import styles from './uses.module.css'
 
-export const metadata: Metadata = {
-  alternates: { canonical: 'https://jsde.me/uses' },
+export const metadata = pageMetadata({
+  canonical: 'https://jsde.me/uses',
   title: 'Gear',
   description:
     'Jannik Schröder’s documented homelab hardware, tooling and self-hosted software, with links to the original write-ups.',
-}
+})
 
 const inventory = [
   {

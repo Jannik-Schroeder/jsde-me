@@ -7,6 +7,7 @@ import { BackToTop } from '@/components/BackToTop'
 import { SiteHeader } from '@/components/SiteHeader'
 import { me, projectsUrl } from '@/lib/me'
 import { linkEvent } from '@/lib/link-events'
+import { pageMetadata, siteUrl } from '@/lib/page-metadata'
 import '@/styles/globals.css'
 import '@/styles/hub.css'
 
@@ -40,9 +41,13 @@ const label = localFont({
   variable: '--font-label',
 })
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'
-
 export const metadata: Metadata = {
+  ...pageMetadata({
+    title: me.name,
+    description:
+      'System administrator passionate about open source and network engineering. Building and automating things in my HomeLab and beyond.',
+    canonical: siteUrl,
+  }),
   metadataBase: new URL(siteUrl),
   authors: [{ name: 'Jannik Schröder', url: siteUrl }],
   title: {
@@ -55,18 +60,6 @@ export const metadata: Metadata = {
     types: {
       'application/rss+xml': '/feed.xml',
     },
-  },
-  openGraph: {
-    type: 'website',
-    url: siteUrl,
-    title: 'Jannik Schröder',
-    description:
-      'System administrator passionate about open source and network engineering. Building and automating things in my HomeLab and beyond.',
-    siteName: 'Jannik Schröder',
-  },
-  twitter: {
-    card: 'summary',
-    creator: '@jsde_me',
   },
 }
 

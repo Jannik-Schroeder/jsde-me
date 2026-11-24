@@ -1,6 +1,6 @@
 import Image from 'next/image'
 import Link from 'next/link'
-import type { Metadata } from 'next'
+import { pageMetadata } from '@/lib/page-metadata'
 import { connection } from 'next/server'
 
 import { linkEvent } from '@/lib/link-events'
@@ -9,11 +9,11 @@ import { me } from '@/lib/me'
 import portrait from './portrait-laptop.jpg'
 import styles from './profile.module.css'
 
-export const metadata: Metadata = {
-  alternates: { canonical: 'https://jsde.me/profile' },
+export const metadata = pageMetadata({
+  canonical: 'https://jsde.me/profile',
   title: 'Profile',
   description: me.short,
-}
+})
 
 // Month coordinates drive the visual spans. The CV text comes directly from me.
 function monthIndex(date: string) {

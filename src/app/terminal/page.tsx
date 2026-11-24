@@ -1,14 +1,14 @@
-import type { Metadata } from 'next'
+import { pageMetadata } from '@/lib/page-metadata'
 import { connection } from 'next/server'
 import { Terminal } from '@/components/Terminal'
 import { getAllArticles } from '@/lib/articles'
 
-export const metadata: Metadata = {
+export const metadata = pageMetadata({
   title: 'Terminal',
   description:
     'Ask about my projects, my homelab and the articles behind them.',
-  alternates: { canonical: 'https://jsde.me/terminal' },
-}
+  canonical: 'https://jsde.me/terminal',
+})
 
 export default async function TerminalPage() {
   await connection()

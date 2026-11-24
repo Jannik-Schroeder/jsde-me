@@ -1,13 +1,13 @@
-import type { Metadata } from 'next'
+import { pageMetadata } from '@/lib/page-metadata'
 import PatchPanel from './PatchPanel'
 import styles from './lab.module.css'
 
-export const metadata: Metadata = {
+export const metadata = pageMetadata({
   title: 'Patch Panel · Lab',
   description:
     'Match homelab services to their default ports in three short rounds.',
-  alternates: { canonical: 'https://jsde.me/lab' },
-}
+  canonical: 'https://jsde.me/lab',
+})
 
 export default function Lab() {
   return (

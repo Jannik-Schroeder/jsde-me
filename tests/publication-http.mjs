@@ -7,6 +7,18 @@ import assert from 'node:assert/strict';
 const article='/articles/missing-data-is-not-zero-traffic';
 const title='A Read-Only Website Report That Separates Missing Data from Zero Traffic';
 const root=process.cwd();
+const crawler = { headers: { 'User-Agent': 'Twitterbot/1.0' } };
+
+function assertSharePreview(html) {
+  const head = html.split('</head>', 1)[0];
+  const image = head.match(/<meta property="og:image" content="([^"]+)"/)?.[1];
+  assert.ok(image, 'Open Graph image in crawler head');
+  const url = new URL(image);
+  assert.ok(['http:', 'https:'].includes(url.protocol));
+  assert.equal(url.pathname, '/social-card.jpg');
+  assert.ok(head.includes(`<meta name="twitter:image" content="${image}"`), 'X image in crawler head');
+  assert.ok(head.includes('<meta name="twitter:card" content="summary_large_image"'), 'large image card');
+}
 async function freePort(){const s=net.createServer();await new Promise(r=>s.listen(0,'127.0.0.1',r));const port=s.address().port;await new Promise(r=>s.close(r));return port;}
 for(const [instant,visible] of [['2026-10-24T12:00:00+02:00',false],['2027-01-01T12:00:00+01:00',true]]){
  const dir=await fs.mkdtemp(path.join(os.tmpdir(),'jsde-http-publication-'));let child;
@@ -15,15 +27,19 @@ for(const [instant,visible] of [['2026-10-24T12:00:00+02:00',false],['2027-01-01
   const clock=path.join(dir,'test-clock.cjs');await fs.writeFile(clock,`const R=Date;const offset=R.parse(${JSON.stringify(instant)})-R.now();global.Date=class extends R{constructor(...a){if(a.length)super(...a);else super(R.now()+offset)}static now(){return R.now()+offset}static parse(v){return R.parse(v)}static UTC(...a){return R.UTC(...a)}};`);
   const port=await freePort();child=spawn(process.execPath,['--require',clock,'server.js'],{cwd:dir,env:{...process.env,PORT:String(port),HOSTNAME:'127.0.0.1',NEXT_TELEMETRY_DISABLED:'1'},stdio:'ignore'});
   let response;
-  for(let i=0;i<60;i++){try{response=await fetch('http://127.0.0.1:'+port+article);break;}catch{await new Promise(r=>setTimeout(r,100));}}
+  for(let i=0;i<60;i++){try{response=await fetch('http://127.0.0.1:'+port+article,crawler);break;}catch{await new Promise(r=>setTimeout(r,100));}}
   assert.ok(response,'standalone server started');assert.equal(response.status,visible?200:404);
   const html=await response.text();assert.equal(html.includes(title),visible,'future metadata/title must stay unavailable');
-  if(visible)assert.ok(html.includes('https://jsde.me'+article),'self canonical present');
+  if (visible) {
+    assert.ok(html.includes('https://jsde.me'+article),'self canonical present');
+    assertSharePreview(html);
+  }
   const map=await (await fetch('http://127.0.0.1:'+port+'/sitemap.xml')).text();assert.equal(map.includes('https://jsde.me'+article),visible,'sitemap uses the same date gate');
   for (const route of ['/', '/articles', '/terminal']) {
-    const page = await fetch('http://127.0.0.1:' + port + route);
+    const page = await fetch('http://127.0.0.1:' + port + route, crawler);
     assert.equal(page.status, 200);
     const source = await page.text();
+    assertSharePreview(source);
     assert.equal(source.includes('Building a Dedicated HiFi Endpoint with Plexamp'), visible, route + ' respects the publication date');
   }
   const gear = await fetch('http://127.0.0.1:' + port + '/uses');

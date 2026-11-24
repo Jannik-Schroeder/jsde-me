@@ -1,4 +1,4 @@
-import { type Metadata } from 'next'
+import { pageMetadata } from '@/lib/page-metadata'
 
 import { ArticleArchive } from '@/components/archive/ArticleArchive'
 import { getArticleTopics } from '@/components/archive/topics'
@@ -6,12 +6,12 @@ import { getAllArticles } from '@/lib/articles'
 
 import styles from '@/components/archive/archive.module.css'
 
-export const metadata: Metadata = {
-  alternates: { canonical: 'https://jsde.me/articles' },
+export const metadata = pageMetadata({
+  canonical: 'https://jsde.me/articles',
   title: 'Articles',
   description:
     'Technical field notes on homelab infrastructure, networking and self-hosting by Jannik Schröder.',
-}
+})
 
 export default function ArticlesIndex() {
   const articles = getAllArticles().map(
