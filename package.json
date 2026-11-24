@@ -1,6 +1,6 @@
 {
   "name": "jsde-me",
-  "version": "1.0.18",
+  "version": "1.0.19",
   "private": true,
   "scripts": {
     "predev": "node scripts/generate-articles.mjs",
@@ -10,7 +10,8 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test:publication": "node tests/publication-http.mjs"
+    "test:publication": "node tests/publication-http.mjs",
+    "test:strava": "node --test tests/strava-activities.test.mjs"
   },
   "browserslist": "defaults, not ie <= 11",
   "dependencies": {

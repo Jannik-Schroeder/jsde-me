@@ -46,7 +46,8 @@ export interface Me {
 /** Where the project work lives. Rendered as the one project reference in the
  *  rail and reused by `built` below, so the URL exists exactly once. */
 export const projectsUrl = 'https://phanes.net'
-export const stravaUrl = 'https://www.strava.com/athletes/1360964105'
+export const stravaAthleteId = 1360964105
+export const stravaUrl = `https://www.strava.com/athletes/${stravaAthleteId}`
 
 export const me: Me = {
   name: 'Jannik Schröder',

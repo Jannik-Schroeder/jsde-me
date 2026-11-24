@@ -134,7 +134,7 @@ export default function RootLayout({
           src="https://rybbit.scpx.de/api/script.js"
           data-site-id="3"
           data-skip-patterns={
-            '["/api/**", "/auth/**", "/callback/**", "/verify/**", "/reset-password/**"]'
+            '["/api/**", "/training", "/auth/**", "/callback/**", "/verify/**", "/reset-password/**"]'
           }
           data-mask-patterns={
             '["/domains/*/**", "/customers/*/**", "/tickets/*/**", "/servers/*/**", "/users/*/**"]'

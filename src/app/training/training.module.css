@@ -1,0 +1,86 @@
+.page {
+  min-height: 65vh;
+  padding-block: clamp(48px, 7vw, 110px);
+}
+.header {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 24px;
+  border-bottom: 2px solid var(--ink);
+  padding-bottom: 24px;
+  margin-bottom: 24px;
+}
+.page p {
+  max-inline-size: 60ch;
+  margin-block: 16px;
+}
+.signIn > p,
+.page > p {
+  font-size: 1.15rem;
+}
+.signIn details {
+  margin-block-start: 24px;
+  max-inline-size: 60ch;
+}
+.signIn summary,
+.controls button {
+  cursor: pointer;
+}
+.signIn details a,
+.controls a,
+.controls button,
+.activities a {
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+.activities {
+  margin-top: 30px;
+}
+.activities li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(210px, 0.85fr) auto;
+  align-items: center;
+  gap: 24px;
+  padding-block: 20px;
+  border-block-start: 1px solid #a8afb7;
+}
+.activities h2 {
+  font:
+    600 clamp(24px, 3vw, 42px)/1.15 var(--font-dm-sans),
+    sans-serif;
+  overflow-wrap: anywhere;
+}
+.activities time,
+.activities dt {
+  color: var(--caption);
+  font-size: 0.875rem;
+}
+.activities dl,
+.controls {
+  display: flex;
+  align-items: center;
+  gap: clamp(20px, 4vw, 64px);
+}
+.activities dd {
+  font:
+    550 clamp(18px, 1.7vw, 26px)/1.4 var(--font-dm-sans),
+    sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+.controls {
+  margin-top: 32px;
+}
+@media (max-width: 700px) {
+  .header,
+  .activities li {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .header a,
+  .activities a {
+    justify-self: start;
+  }
+}
