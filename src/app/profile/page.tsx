@@ -6,7 +6,7 @@ import { connection } from 'next/server'
 import { linkEvent } from '@/lib/link-events'
 import { me } from '@/lib/me'
 
-import portrait from './portrait.webp'
+import portrait from './portrait-laptop.jpg'
 import styles from './profile.module.css'
 
 export const metadata: Metadata = {
@@ -64,8 +64,8 @@ export default async function Profile() {
         <div className={styles.portrait}>
           <Image
             src={portrait}
-            alt="Jannik Schröder standing beside a lake."
-            sizes="(max-width: 700px) 100vw, (max-width: 1240px) 36vw, 430px"
+            alt="Jannik Schröder looking down at his laptop."
+            sizes="(max-width: 700px) calc(100vw - 40px), (max-width: 1680px) 38vw, 640px"
             preload
           />
         </div>

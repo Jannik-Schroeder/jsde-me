@@ -96,9 +96,6 @@
   display: block;
   width: 100%;
   height: auto;
-  aspect-ratio: 0.98;
-  object-fit: cover;
-  object-position: 50% 38%;
 }
 
 .section {
@@ -282,11 +279,6 @@
 @media (max-width: 700px) {
   .hero {
     grid-template-columns: 1fr;
-  }
-
-  .portrait img {
-    aspect-ratio: 1.35;
-    object-position: 50% 28%;
   }
 }
 
