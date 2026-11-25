@@ -1,8 +1,17 @@
-import { Fragment, useMemo } from 'react'
+'use client'
+
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import styles from './lab-hero.module.css'
 
 const timeZone = 'Europe/Berlin'
+const localClock = new Intl.DateTimeFormat('en-GB', {
+  timeZone,
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hourCycle: 'h23',
+})
 const paderbornDate = new Intl.DateTimeFormat('sv-SE', {
   timeZone,
   year: 'numeric',
@@ -75,20 +84,30 @@ function FieldNoteCalendar({
 }
 
 export function LabClockStrip({
-  now,
-  time,
+  initialTime,
   publishedDates,
 }: {
-  now: Date
-  time: string
+  initialTime: number
   publishedDates: readonly string[]
 }) {
+  const [now, setNow] = useState(() => new Date(initialTime))
+  useEffect(() => {
+    let timer: number
+    function tick() {
+      const current = new Date()
+      setNow(current)
+      timer = window.setTimeout(tick, 1000 - current.getMilliseconds())
+    }
+    timer = window.setTimeout(tick, 0)
+    return () => window.clearTimeout(timer)
+  }, [])
+
   return (
     <dl className={styles.stats} aria-label="Homelab overview">
       <div>
         <dt>Local time in Paderborn</dt>
         <dd>
-          <LocalTime now={now} time={time} />
+          <LocalTime now={now} time={localClock.format(now)} />
         </dd>
       </div>
       <div>

@@ -1,5 +1,5 @@
 import { stravaUrl } from '@/lib/me'
-import { getWhoopSport, type WhoopSport } from '@/lib/whoop-sport'
+import { formatKilometres, type WhoopSport } from '@/lib/whoop-sport'
 import { RefreshWhileVisible } from './RefreshWhileVisible'
 import styles from './sport-section.module.css'
 
@@ -7,18 +7,13 @@ const dateFormat = new Intl.DateTimeFormat('en-GB', {
   dateStyle: 'medium',
   timeZone: 'UTC',
 })
-const distanceFormat = new Intl.NumberFormat('en-GB', {
-  maximumFractionDigits: 2,
-})
 
 function dateLabel(day: string) {
   return <time dateTime={day}>{dateFormat.format(new Date(day))}</time>
 }
 
 function distance(metres: number | null) {
-  return metres === null
-    ? 'Unavailable'
-    : `${distanceFormat.format(metres / 1000)} km`
+  return metres === null ? 'Unavailable' : `${formatKilometres(metres)} km`
 }
 
 function elapsed(seconds: number) {
@@ -113,7 +108,7 @@ function SportNumbers({
   )
 }
 
-export function SportPanel({ sport }: { sport?: WhoopSport }) {
+export function SportSection({ sport }: { sport: WhoopSport }) {
   return (
     <section
       className={styles.section}
@@ -132,23 +127,14 @@ export function SportPanel({ sport }: { sport?: WhoopSport }) {
             My Strava profile <span aria-hidden="true">↗</span>
           </a>
         </div>
-        {sport?.status === 'ready' && <SportNumbers sport={sport} />}
-        {sport?.status === 'unavailable' && (
+        {sport.status === 'ready' && <SportNumbers sport={sport} />}
+        {sport.status === 'unavailable' && (
           <p className={styles.status}>
             The latest WHOOP data is temporarily unavailable.
           </p>
         )}
       </div>
-    </section>
-  )
-}
-
-export async function SportSection() {
-  const sport = await getWhoopSport()
-  return (
-    <>
-      <SportPanel sport={sport} />
       <RefreshWhileVisible intervalMinutes={5} />
-    </>
+    </section>
   )
 }

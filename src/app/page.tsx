@@ -1,11 +1,12 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { connection } from 'next/server'
-import { cache, Suspense } from 'react'
-import { SportSection, SportPanel } from '@/components/SportSection'
+import { cache } from 'react'
+import { SportSection } from '@/components/SportSection'
+import { getWhoopSport } from '@/lib/whoop-sport'
 import { RackViewer } from '@/components/RackViewer'
 import { StatusLine } from '@/components/StatusLine'
-import { AwakeHero } from '@/components/AwakeHero'
+import { RunningHero } from '@/components/RunningHero'
 import { ArticleArchive } from '@/components/archive/ArticleArchive'
 import { getArticleTopics } from '@/components/archive/topics'
 import { CareerRail } from '@/components/CareerRail'
@@ -25,6 +26,7 @@ const getRequestTime = cache(async () => {
 
 export default async function Home() {
   const initialTime = await getRequestTime()
+  const sport = await getWhoopSport()
   const articles = getAllArticles()
   const notes = articles.map(({ slug, title, date, description }) => ({
     slug,
@@ -35,7 +37,8 @@ export default async function Home() {
   }))
   return (
     <main>
-      <AwakeHero
+      <RunningHero
+        week={sport.status === 'ready' ? sport.last7Days : null}
         initialTime={initialTime}
         publishedDates={notes.map((note) => note.date)}
       >
@@ -52,13 +55,11 @@ export default async function Home() {
             Career timeline <b aria-hidden="true">→</b>
           </a>
         </div>
-      </AwakeHero>
+      </RunningHero>
       <NotesTicker
         articles={notes.slice(0, 4).map(({ slug, title }) => ({ slug, title }))}
       />
-      <Suspense fallback={<SportPanel />}>
-        <SportSection />
-      </Suspense>
+      <SportSection sport={sport} />
       <section
         className="hub-wrap field-section"
         id="field-notes"

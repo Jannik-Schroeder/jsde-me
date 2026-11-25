@@ -6,6 +6,11 @@ const DAY_MS = 86_400_000
 const MAX_WORKOUT_PAGES = 4
 const MAX_RECENT_RUNS = 5
 const CACHE_MS = 5 * 60_000
+const kilometres = new Intl.NumberFormat('en-GB', { maximumFractionDigits: 2 })
+
+export function formatKilometres(metres: number) {
+  return kilometres.format(metres / 1000)
+}
 const RETRY_MS = 15_000
 const TIMEOUT_MS = 4_000
 const berlin = new Intl.DateTimeFormat('sv-SE', {
