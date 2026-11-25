@@ -109,110 +109,72 @@ export async function fetchHealth(): Promise<HealthResult> {
 // ---------------------------------------------------------------- commits
 
 /**
- * GitHub's public events feed, newest first: sum the commit counts of today's
- * PushEvents. Good enough for a single day without pagination.
+ * Read GitHub's actual contribution calendar, including the user's visible
+ * private contribution totals. PushEvent payloads no longer contain commit counts.
+ * Keep the legacy API field name `commits`, but count contributions as labelled.
  */
-async function fetchGithubCommitsToday(): Promise<number | null> {
+export async function fetchCommitsToday(now: Date = new Date()): Promise<number | null> {
   const token = process.env.GITHUB_TOKEN
   const user = process.env.GITHUB_USER
   if (!token || !user) return null
 
+  const today = berlinDayOf(now)
+  if (!today) return null
+
   try {
-    const res = await fetch(`https://api.github.com/users/${encodeURIComponent(user)}/events?per_page=100`, {
+    const res = await fetch('https://api.github.com/graphql', {
+      method: 'POST',
       headers: {
         authorization: `Bearer ${token}`,
         accept: 'application/vnd.github+json',
+        'content-type': 'application/json',
       },
+      body: JSON.stringify({
+        query: `query DailyContributions($user: String!, $from: DateTime!, $to: DateTime!) {
+          user(login: $user) {
+            contributionsCollection(from: $from, to: $to) {
+              contributionCalendar { weeks { contributionDays { date contributionCount } } }
+            }
+          }
+        }`,
+        variables: {
+          user,
+          from: `${today}T00:00:00Z`,
+          to: `${today}T23:59:59Z`,
+        },
+      }),
+      // The day-specific request is shared by the homepage and status endpoint.
+      cache: 'force-cache',
+      next: { revalidate: 300 },
       signal: AbortSignal.timeout(SOURCE_TIMEOUT_MS),
     })
     if (!res.ok) {
-      console.error('status: github events responded', res.status)
+      console.error('status: github contributions responded', res.status)
       return null
     }
-    const data: unknown = await res.json()
-    if (!Array.isArray(data)) return null
-
-    const today = todayIso()
-    let total = 0
-    for (const raw of data) {
-      const event = asObject(raw)
-      if (asString(event.type) !== 'PushEvent') continue
-      if (berlinDayOf(asString(event.created_at)) !== today) continue
-      const payload = asObject(event.payload)
-      if (Array.isArray(payload.commits)) total += payload.commits.length
-      else if (typeof payload.size === 'number') total += payload.size
+    const data = asObject(await res.json())
+    if (Array.isArray(data.errors) && data.errors.length > 0) {
+      console.error('status: github contribution query failed')
+      return null
     }
-    return total
+    const userData = asObject(asObject(data.data).user)
+    const calendar = asObject(asObject(userData.contributionsCollection).contributionCalendar)
+    if (!Array.isArray(calendar.weeks)) return null
+    for (const rawWeek of calendar.weeks) {
+      const week = asObject(rawWeek)
+      if (!Array.isArray(week.contributionDays)) continue
+      for (const rawDay of week.contributionDays) {
+        const day = asObject(rawDay)
+        if (day.date !== today) continue
+        const count = asNumber(day.contributionCount)
+        return count !== null && Number.isSafeInteger(count) && count >= 0 ? count : null
+      }
+    }
+    return null
   } catch (e) {
     logSourceFailure('github', e)
     return null
   }
-}
-
-/**
- * Forgejo mirrors the Gitea API: the user activity feed returns Action objects,
- * filtered here to `op_type === "commit_repo"`. Each such action carries a `content`
- * field that is itself a JSON *string* of shape `{ Commits: [...], Len: number }`;
- * `Len` is the push's commit count (falls back to `Commits.length` if absent). The
- * `date` query param should already scope the feed to today, but older Forgejo
- * versions ignore it, so `created` is re-checked defensively.
- */
-async function fetchForgejoCommitsToday(): Promise<number | null> {
-  const url = process.env.FORGEJO_URL
-  const token = process.env.FORGEJO_TOKEN
-  const user = process.env.FORGEJO_USER
-  if (!url || !token || !user) return null
-
-  try {
-    const today = todayIso()
-    const endpoint = `${url.replace(/\/+$/, '')}/api/v1/users/${encodeURIComponent(user)}/activities/feeds?only-performed-by=true&date=${today}&limit=50`
-    const res = await fetch(endpoint, {
-      headers: { authorization: `token ${token}` },
-      signal: AbortSignal.timeout(SOURCE_TIMEOUT_MS),
-    })
-    if (!res.ok) {
-      console.error('status: forgejo activities responded', res.status)
-      return null
-    }
-    const data: unknown = await res.json()
-    if (!Array.isArray(data)) return null
-
-    let total = 0
-    for (const raw of data) {
-      const action = asObject(raw)
-      if (asString(action.op_type) !== 'commit_repo') continue
-      if (berlinDayOf(asString(action.created)) !== today) continue
-
-      const contentRaw = action.content
-      if (typeof contentRaw !== 'string') continue
-      let content: Record<string, unknown>
-      try {
-        content = asObject(JSON.parse(contentRaw) as unknown)
-      } catch {
-        continue
-      }
-
-      const len = asNumber(content.Len)
-      if (len !== null) {
-        total += len
-      } else if (Array.isArray(content.Commits)) {
-        total += content.Commits.length
-      }
-    }
-    return total
-  } catch (e) {
-    logSourceFailure('forgejo', e)
-    return null
-  }
-}
-
-/** Sum of GitHub and Forgejo commits today, counting only the sources that answered. */
-export async function fetchCommitsToday(): Promise<number | null> {
-  const [github, forgejo] = await Promise.allSettled([fetchGithubCommitsToday(), fetchForgejoCommitsToday()])
-  const githubCount = github.status === 'fulfilled' ? github.value : null
-  const forgejoCount = forgejo.status === 'fulfilled' ? forgejo.value : null
-  if (githubCount === null && forgejoCount === null) return null
-  return (githubCount ?? 0) + (forgejoCount ?? 0)
 }
 
 // ---------------------------------------------------------------- coding time

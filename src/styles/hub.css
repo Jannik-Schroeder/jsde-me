@@ -125,14 +125,34 @@
   font-size: clamp(55px, 6.6vw, 106px);
   line-height: 0.9;
 }
+.hero-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(16px, 2.5vw, 36px);
+  margin-block: 28px 24px;
+}
+.hero-metrics > div {
+  min-width: 0;
+  border-top: 1px solid #bbc3ca;
+  padding-top: 12px;
+}
+.hero-metrics dt {
+  font: 400 clamp(11px, 1vw, 14px)/1.4 var(--label);
+  text-transform: uppercase;
+}
+.hero-metrics dt a:hover {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
 .hero-distance {
   margin-left: -0.024em;
-  margin-top: 0.04em;
-  font-size: min(240px, 30cqi, calc(134cqi / var(--digits)));
-  line-height: 0.94;
+  margin-top: 8px;
+  font-size: min(140px, 15cqi, calc(68cqi / var(--metric-digits)));
+  line-height: 1;
   letter-spacing: 0.015em;
   color: var(--signal);
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 .hero-distance span {
   font-size: 0.38em;
@@ -141,9 +161,9 @@
   text-transform: none;
 }
 .hero-caption {
-  margin-top: 16px;
+  margin-top: 8px;
   color: var(--caption);
-  font-size: 16px;
+  font-size: clamp(13px, 1.2vw, 16px);
   line-height: 1.4;
 }
 .hero-vignette {
@@ -752,12 +772,20 @@
   .hero h1 {
     font-size: clamp(30px, 9.5vw, 65px);
   }
+  .hero h1 {
+    max-width: 80%;
+  }
   .hero-main {
-    grid-template-columns: minmax(0, 1fr) 18%;
-    gap: 8px;
+    display: block;
+    position: relative;
   }
   .hero-vignette {
-    align-self: start;
+    position: absolute;
+    inset: 0 0 auto auto;
+    width: 18%;
+  }
+  .hero-metrics {
+    margin-top: 24px;
   }
   .hero-actions {
     flex-direction: column;

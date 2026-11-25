@@ -4,6 +4,7 @@ import { connection } from 'next/server'
 import { cache } from 'react'
 import { SportSection } from '@/components/SportSection'
 import { getWhoopSport } from '@/lib/whoop-sport'
+import { fetchCommitsToday } from '@/lib/status-sources'
 import { RackViewer } from '@/components/RackViewer'
 import { StatusLine } from '@/components/StatusLine'
 import { RunningHero } from '@/components/RunningHero'
@@ -26,7 +27,7 @@ const getRequestTime = cache(async () => {
 
 export default async function Home() {
   const initialTime = await getRequestTime()
-  const sport = await getWhoopSport()
+  const [sport, contributions] = await Promise.all([getWhoopSport(), fetchCommitsToday()])
   const articles = getAllArticles()
   const notes = articles.map(({ slug, title, date, description }) => ({
     slug,
@@ -38,6 +39,7 @@ export default async function Home() {
   return (
     <main>
       <RunningHero
+        contributions={contributions}
         week={sport.status === 'ready' ? sport.last7Days : null}
         initialTime={initialTime}
         publishedDates={notes.map((note) => note.date)}
@@ -139,7 +141,7 @@ export default async function Home() {
         <RackViewer />
       </section>
       <div className="hub-wrap home-status">
-        <StatusLine />
+        <StatusLine showContributions={false} />
       </div>
     </main>
   )

@@ -38,6 +38,8 @@ jobs:
 
         npm run build
 
+        npm run test:status
+
         npm run test:whoop
 
         npm run test:publication'

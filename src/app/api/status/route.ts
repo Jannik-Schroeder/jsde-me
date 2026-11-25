@@ -14,10 +14,10 @@ interface StatusResponse {
   updatedAt: string
 }
 
-let cache: { data: StatusResponse; expiresAt: number } | null = null
+let cache: { data: StatusResponse; expiresAt: number; day: string } | null = null
 
 /**
- * All four sources are queried concurrently and are each individually defensive
+ * All status sources are queried concurrently and are each individually defensive
  * (timeouts, missing env vars, bad shapes all resolve to null rather than reject).
  * `Promise.allSettled` is a second line of defense in case one throws anyway — this
  * route must never propagate an upstream failure to the client.
@@ -51,11 +51,13 @@ async function computeStatus(): Promise<StatusResponse> {
 
 export async function GET() {
   const now = Date.now()
-  if (cache && cache.expiresAt > now) {
-    return NextResponse.json(cache.data)
+  const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Berlin' }).format(now)
+  const headers = { 'Cache-Control': 'private, no-store' }
+  if (cache && cache.expiresAt > now && cache.day === day) {
+    return NextResponse.json(cache.data, { headers })
   }
 
   const data = await computeStatus()
-  cache = { data, expiresAt: now + CACHE_MS }
-  return NextResponse.json(data)
+  cache = { data, expiresAt: now + CACHE_MS, day }
+  return NextResponse.json(data, { headers })
 }

@@ -1,6 +1,6 @@
 {
   "name": "jsde-me",
-  "version": "1.0.21",
+  "version": "1.0.22",
   "private": true,
   "scripts": {
     "predev": "node scripts/generate-articles.mjs",
@@ -12,7 +12,8 @@
     "typecheck": "tsc --noEmit",
     "test:publication": "node tests/publication-http.mjs",
     "test:strava": "node --test tests/strava-activities.test.mjs",
-    "test:whoop": "node --test tests/whoop-*.test.mjs"
+    "test:whoop": "node --test tests/whoop-*.test.mjs",
+    "test:status": "node --experimental-strip-types --test tests/github-contributions.test.mjs"
   },
   "browserslist": "defaults, not ie <= 11",
   "dependencies": {

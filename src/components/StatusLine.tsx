@@ -119,7 +119,7 @@ function ago(updatedAt: string, now: number): string | null {
 }
 
 /** Resting heart rate, sleep, steps, coding, contributions — in that order. */
-function itemsOf(status: Status): Item[] {
+function itemsOf(status: Status, showContributions: boolean): Item[] {
   const out: Item[] = []
   const hr = num(status.restingHeartRate)
   const sleep = num(status.sleepMinutes)
@@ -168,14 +168,14 @@ function itemsOf(status: Status): Item[] {
       title: `Coding time today: ${duration(coding)}`,
     })
   }
-  if (commits !== null) {
+  if (showContributions && commits !== null) {
     out.push({
       key: 'commits',
       icon: <CommitIcon />,
       value: commits,
       format: grouped,
       label: 'contributions',
-      title: `Commits today across GitHub and Forgejo: ${commits}`,
+      title: `GitHub contributions today: ${commits}`,
     })
   }
   return out
@@ -187,7 +187,7 @@ function itemsOf(status: Status): Item[] {
  * fails, or every value is null, this renders nothing at all — header
  * included — so it leaves no gap behind.
  */
-export function StatusLine() {
+export function StatusLine({ showContributions = true }: { showContributions?: boolean }) {
   const [status, setStatus] = useState<Status | null>(null)
   const [progress, setProgress] = useState(0)
   const [now, setNow] = useState(() => Date.now())
@@ -232,7 +232,7 @@ export function StatusLine() {
 
   if (status === null) return null
 
-  const items = itemsOf(status)
+  const items = itemsOf(status, showContributions)
   if (items.length === 0) return null
 
   const stamp = ago(status.updatedAt, now)
