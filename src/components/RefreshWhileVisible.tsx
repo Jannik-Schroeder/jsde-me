@@ -3,7 +3,7 @@
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 
-export function TrainingRefresh({
+export function RefreshWhileVisible({
   intervalMinutes,
 }: {
   intervalMinutes: number
@@ -25,5 +25,5 @@ export function TrainingRefresh({
       document.removeEventListener('visibilitychange', refreshIfDue)
     }
   }, [intervalMinutes, router])
-  return <a href="/training">Refresh activities</a>
+  return null
 }

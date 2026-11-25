@@ -38,6 +38,8 @@ jobs:
 
         npm run build
 
+        npm run test:whoop
+
         npm run test:publication'
     - name: Scan this commit
       run: docker run --rm -v "$GITHUB_WORKSPACE:/src:ro" ghcr.io/gitleaks/gitleaks:v8.30.1 git /src --log-opts=-1 --redact --no-banner

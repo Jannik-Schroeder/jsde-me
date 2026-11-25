@@ -1,7 +1,8 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { connection } from 'next/server'
-import { cache } from 'react'
+import { cache, Suspense } from 'react'
+import { SportSection, SportPanel } from '@/components/SportSection'
 import { RackViewer } from '@/components/RackViewer'
 import { StatusLine } from '@/components/StatusLine'
 import { AwakeHero } from '@/components/AwakeHero'
@@ -10,7 +11,7 @@ import { getArticleTopics } from '@/components/archive/topics'
 import { CareerRail } from '@/components/CareerRail'
 import { NotesTicker } from '@/components/NotesTicker'
 import { getAllArticles } from '@/lib/articles'
-import { me, stravaUrl } from '@/lib/me'
+import { me } from '@/lib/me'
 
 export const metadata: Metadata = {
   alternates: { canonical: 'https://jsde.me/' },
@@ -40,8 +41,8 @@ export default async function Home() {
       >
         <p className="hero-intro">
           I’m a sysadmin in Paderborn. I write about my{' '}
-          <Link href="/uses">homelab</Link> here and log my training on{' '}
-          <a href={stravaUrl}>Strava</a>.
+          <Link href="/uses">homelab</Link> and keep a{' '}
+          <a href="#training">running log</a> here.
         </p>
         <div className="hero-actions">
           <Link className="primary-action" href="/articles">
@@ -55,6 +56,9 @@ export default async function Home() {
       <NotesTicker
         articles={notes.slice(0, 4).map(({ slug, title }) => ({ slug, title }))}
       />
+      <Suspense fallback={<SportPanel />}>
+        <SportSection />
+      </Suspense>
       <section
         className="hub-wrap field-section"
         id="field-notes"

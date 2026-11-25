@@ -55,6 +55,7 @@ function cookieKey() {
   if (!credentials) return null
   return createHash('sha256')
     .update('jsde.me Strava cookie v1\0')
+    .update(process.env.SITE_SESSION_SECRET ?? '')
     .update(credentials.clientId)
     .update('\0')
     .update(credentials.clientSecret)

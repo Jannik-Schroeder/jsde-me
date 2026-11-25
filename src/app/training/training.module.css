@@ -72,6 +72,26 @@
 .controls {
   margin-top: 32px;
 }
+.whoop {
+  scroll-margin-top: 80px;
+  padding: clamp(16px, 2.5vw, 32px);
+  background: #f6f6f2;
+  border-inline-start: 3px solid var(--ink);
+  margin-block: 24px;
+}
+.whoop h2 {
+  font-size: clamp(23px, 2.2vw, 32px);
+  font-weight: 650;
+}
+.whoopActions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 18px 28px;
+}
+.whoopActions button {
+  cursor: pointer;
+}
 @media (max-width: 700px) {
   .header,
   .activities li {
